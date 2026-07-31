@@ -11,6 +11,8 @@ import '../../services/firestore_service.dart';
 import '../auth/login_screen.dart';
 import 'scan_to_checkin_screen.dart';
 
+import '../../utils/event_image_helper.dart';
+
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
 
@@ -70,6 +72,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final auth = context.watch<AuthProvider>();
     final firestore = context.read<FirestoreService>();
     final dateFormat = DateFormat('MMM d, yyyy · h:mm a');
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
     
     final isLive = event.status == EventStatus.published &&
         event.startTime.isBefore(DateTime.now().add(const Duration(hours: 1))) &&
@@ -90,9 +93,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 fit: StackFit.expand,
                 children: [
                   CachedNetworkImage(
-                    imageUrl: (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty) 
-                        ? event.bannerImageUrl! 
-                        : 'https://via.placeholder.com/400x300',
+                    imageUrl: bannerUrl,
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) => Container(
                       color: const Color(0xFF1E2F4D),

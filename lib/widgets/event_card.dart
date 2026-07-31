@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../models/event_model.dart';
 
+import '../utils/event_image_helper.dart';
+
 class EventCard extends StatelessWidget {
   final EventModel event;
   final VoidCallback onTap;
@@ -19,6 +21,7 @@ class EventCard extends StatelessWidget {
         event.endTime.isAfter(DateTime.now());
     
     final progress = event.capacity > 0 ? (event.registeredCount / event.capacity).clamp(0.0, 1.0) : 0.0;
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -49,9 +52,7 @@ class EventCard extends StatelessWidget {
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: CachedNetworkImage(
-                        imageUrl: (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty) 
-                            ? event.bannerImageUrl! 
-                            : 'https://via.placeholder.com/400x225',
+                        imageUrl: bannerUrl,
                         fit: BoxFit.cover,
                         errorWidget: (_, _, _) => Container(
                           color: Colors.grey.shade200,

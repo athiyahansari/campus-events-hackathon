@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/event_model.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/clubs.dart';
+import '../../utils/event_image_helper.dart';
 import 'event_detail_screen.dart';
 
 class ArchiveScreen extends StatefulWidget {
@@ -140,7 +141,6 @@ class _FilterChip extends StatelessWidget {
         ),
       ),
     );
-  }
 }
 
 class _ArchivedEventCard extends StatelessWidget {
@@ -150,6 +150,8 @@ class _ArchivedEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -178,9 +180,7 @@ class _ArchivedEventCard extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: CachedNetworkImage(
-                        imageUrl: (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty) 
-                            ? event.bannerImageUrl! 
-                            : 'https://via.placeholder.com/150',
+                        imageUrl: bannerUrl,
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
