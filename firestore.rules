@@ -70,6 +70,7 @@ service cloud.firestore {
     // ---------------- events ----------------
     match /events/{eventId} {
       allow read: if resource.data.status in ['published', 'archived']
+        || resource.data.organizerId == request.auth.uid
         || ownsCategory(resource.data.category);
 
       // An unapproved organizer can still create events, just not published ones — they land

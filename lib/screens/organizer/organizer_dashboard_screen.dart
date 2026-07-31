@@ -9,6 +9,7 @@ import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/event_image_helper.dart';
 import '../../widgets/app_widgets.dart';
+import 'checkin_display_screen.dart';
 import 'create_event_screen.dart';
 import 'manage_event_screen.dart';
 
@@ -46,8 +47,6 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
       showAppSnack(context, 'Three demo events created.');
     } catch (e) {
       if (!mounted) return;
-      // Previously this always claimed success even when the write was
-      // rejected — now a failure is actually surfaced.
       showAppSnack(context, 'Could not create demo events: $e', isError: true);
     } finally {
       if (mounted) setState(() => _seeding = false);
@@ -92,7 +91,7 @@ class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return AppErrorState(
-              message: 'We could not load your events. Check your connection and try again.',
+              message: 'Unable to load events: ${snapshot.error}',
               onRetry: () => setState(() {}),
             );
           }
@@ -353,6 +352,33 @@ class _EventCard extends StatelessWidget {
                       '${event.checkedInCount}',
                       style: TextStyle(fontSize: 12, color: p.textSecondary),
                     ),
+                    if (event.status == EventStatus.published) ...[
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => CheckinDisplayScreen(event: event)),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: p.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            border: Border.all(color: p.accent.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.qr_code_2, size: 14, color: p.accent),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Present QR',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: p.accent),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
