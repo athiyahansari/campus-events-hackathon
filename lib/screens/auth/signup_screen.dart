@@ -26,6 +26,7 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _club;
   Set<String> _interests = {};
   bool _submitting = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -78,7 +79,9 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool obscure = false, TextInputType? keyboardType, String? Function(String?)? validator}) {
+  Widget _buildTextField(String label, TextEditingController controller, {bool obscure = false, bool isPassword = false, TextInputType? keyboardType, String? Function(String?)? validator}) {
+    final isObscured = isPassword ? _obscurePassword : obscure;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -86,7 +89,7 @@ class _SignupScreenState extends State<SignupScreen> {
         const SizedBox(height: 4),
         TextFormField(
           controller: controller,
-          obscureText: obscure,
+          obscureText: isObscured,
           keyboardType: keyboardType,
           validator: validator,
           decoration: InputDecoration(
@@ -99,6 +102,19 @@ class _SignupScreenState extends State<SignupScreen> {
               borderSide: const BorderSide(color: Colors.black12),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  )
+                : null,
           ),
         ),
       ],
@@ -174,7 +190,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     return null;
                   }),
                   const SizedBox(height: 16),
-                  _buildTextField('Password', _passwordController, obscure: true, validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null),
+                  _buildTextField('Password', _passwordController, isPassword: true, validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null),
                   const SizedBox(height: 16),
                   
                   if (_role == UserRole.student) ...[

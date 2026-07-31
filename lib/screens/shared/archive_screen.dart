@@ -141,6 +141,7 @@ class _FilterChip extends StatelessWidget {
         ),
       ),
     );
+  }
 }
 
 class _ArchivedEventCard extends StatelessWidget {

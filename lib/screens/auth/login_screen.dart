@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _submitting = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -119,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 4),
                   TextFormField(
                     controller: _passwordController,
+                    obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -129,8 +131,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderSide: const BorderSide(color: Colors.black12),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                     ),
-                    obscureText: true,
                     validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
                   ),
                   const SizedBox(height: 24),
