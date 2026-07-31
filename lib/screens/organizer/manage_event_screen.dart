@@ -184,6 +184,40 @@ class ManageEventScreen extends StatelessWidget {
                   );
                 },
               ),
+              if (current.certificateEnabled) ...[
+                const Divider(height: 32),
+                Text('Certificate Requests', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                StreamBuilder<List<RegistrationModel>>(
+                  stream: firestore.eventRegistrations(current.id),
+                  builder: (context, certSnapshot) {
+                    if (!certSnapshot.hasData) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    final requests = certSnapshot.data!.where((r) => r.certificateRequested).toList();
+                    if (requests.isEmpty) {
+                      return const Text('No certificate requests yet.');
+                    }
+                    return Column(
+                      children: requests.map((r) {
+                        return FutureBuilder<String>(
+                          future: firestore.fetchUserName(r.userId),
+                          builder: (context, nameSnapshot) {
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.workspace_premium),
+                              title: Text(nameSnapshot.data ?? 'Loading…'),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ],
               const Divider(height: 32),
               Text('Waitlist', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),

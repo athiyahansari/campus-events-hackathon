@@ -18,6 +18,16 @@ class AlreadyWaitlistedException implements Exception {
   String toString() => "You're already on the waitlist for this event.";
 }
 
+class CertificateNotAvailableException implements Exception {
+  @override
+  String toString() => 'Certificates for this event are not available yet.';
+}
+
+class NotCheckedInException implements Exception {
+  @override
+  String toString() => "You didn't check in to this event, so a certificate isn't available.";
+}
+
 class EmptyWaitlistException implements Exception {
   @override
   String toString() => 'No one is on the waitlist for this event.';
@@ -367,6 +377,36 @@ class FirestoreService {
         'lastCheckinToken': scannedToken,
       });
       tx.update(eventRef, {'checkedInCount': checkedInCount + 1});
+    });
+  }
+
+  /// Requests a participation certificate for [userId]'s attendance at [eventId]. Only valid
+  /// once the organizer has enabled certificates for the event, the student actually checked
+  /// in, and the event has ended — issuing the certificate itself happens outside the app.
+  Future<void> requestCertificate({
+    required String eventId,
+    required String userId,
+  }) async {
+    final registrationRef = _registrations.doc('${eventId}_$userId');
+    final eventRef = _events.doc(eventId);
+
+    final eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      throw Exception('Event not found.');
+    }
+    final event = EventModel.fromMap(eventSnap.id, eventSnap.data()!);
+    if (!event.certificateEnabled || DateTime.now().isBefore(event.endTime)) {
+      throw CertificateNotAvailableException();
+    }
+
+    final regSnap = await registrationRef.get();
+    if (!regSnap.exists || regSnap.data()?['checkedIn'] != true) {
+      throw NotCheckedInException();
+    }
+
+    await registrationRef.update({
+      'certificateRequested': true,
+      'certificateRequestedAt': FieldValue.serverTimestamp(),
     });
   }
 }

@@ -44,6 +44,9 @@ class AuthProvider extends ChangeNotifier {
     required UserRole role,
     String? club,
     List<String> interests = const [],
+    int? age,
+    String? batch,
+    String? staffId,
   }) async {
     errorMessage = null;
     try {
@@ -54,6 +57,9 @@ class AuthProvider extends ChangeNotifier {
         role: role,
         club: club,
         interests: interests,
+        age: age,
+        batch: batch,
+        staffId: staffId,
       );
       return true;
     } on FirebaseAuthException catch (e) {
@@ -75,6 +81,9 @@ class AuthProvider extends ChangeNotifier {
       interests: interests,
       createdAt: userProfile!.createdAt,
       lastActiveAt: userProfile!.lastActiveAt,
+      age: userProfile!.age,
+      batch: userProfile!.batch,
+      staffId: userProfile!.staffId,
     );
     notifyListeners();
   }

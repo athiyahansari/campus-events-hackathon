@@ -23,6 +23,24 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _registering = false;
+  bool _requestingCertificate = false;
+
+  Future<void> _requestCertificate(String userId) async {
+    setState(() => _requestingCertificate = true);
+    final firestore = context.read<FirestoreService>();
+    try {
+      await firestore.requestCertificate(eventId: widget.event.id, userId: userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Certificate requested! The organizer will follow up.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _requestingCertificate = false);
+    }
+  }
 
   Future<void> _register(String userId) async {
     setState(() => _registering = true);
@@ -161,11 +179,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         final registration = snapshot.data;
         if (registration != null) {
           if (registration.checkedIn) {
-            return Chip(
+            final checkedInChip = Chip(
               label: const Text('Checked in'),
               avatar: const Icon(Icons.check_circle, size: 18, color: Colors.white),
               backgroundColor: Colors.green,
               labelStyle: const TextStyle(color: Colors.white),
+            );
+
+            if (!event.certificateEnabled || DateTime.now().isBefore(event.endTime)) {
+              return checkedInChip;
+            }
+
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                checkedInChip,
+                if (registration.certificateRequested)
+                  const Chip(
+                    label: Text('Certificate requested'),
+                    avatar: Icon(Icons.workspace_premium, size: 18),
+                  )
+                else
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.workspace_premium, size: 18),
+                    label: _requestingCertificate
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Request Certificate'),
+                    onPressed: _requestingCertificate ? null : () => _requestCertificate(userId),
+                  ),
+              ],
             );
           }
           return FilledButton.icon(

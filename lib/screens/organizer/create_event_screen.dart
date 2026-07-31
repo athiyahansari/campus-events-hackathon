@@ -28,6 +28,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   DateTime? _startTime;
   DateTime? _endTime;
   bool _publishImmediately = true;
+  bool _certificateEnabled = false;
   bool _submitting = false;
 
   @override
@@ -42,6 +43,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _startTime = existing?.startTime;
     _endTime = existing?.endTime;
     _publishImmediately = existing == null || existing.status == EventStatus.published;
+    _certificateEnabled = existing?.certificateEnabled ?? false;
   }
 
   @override
@@ -102,6 +104,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'capacity': int.parse(_capacityController.text.trim()),
           'bannerImageUrl': _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
           'status': eventStatusToString(_publishImmediately ? EventStatus.published : EventStatus.draft),
+          'certificateEnabled': _certificateEnabled,
         });
       } else {
         final event = EventModel(
@@ -115,6 +118,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           capacity: int.parse(_capacityController.text.trim()),
           registeredCount: 0,
           checkedInCount: 0,
+          certificateEnabled: _certificateEnabled,
           bannerImageUrl: _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
           organizerId: auth.firebaseUser!.uid,
           status: _publishImmediately ? EventStatus.published : EventStatus.draft,
@@ -224,6 +228,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               subtitle: const Text('Off = save as draft, visible only to you'),
               value: _publishImmediately,
               onChanged: (v) => setState(() => _publishImmediately = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Enable participation certificates'),
+              subtitle: const Text('Checked-in attendees can request one once the event ends'),
+              value: _certificateEnabled,
+              onChanged: (v) => setState(() => _certificateEnabled = v),
             ),
             const SizedBox(height: 24),
             FilledButton(

@@ -139,6 +139,16 @@ service cloud.firestore {
       // Note: `reminderSent` is only ever written by the sendEventReminders Cloud Function
       // (functions/index.js) via the Admin SDK, which bypasses these rules entirely — no
       // client-side rule needed for it.
+
+      // A checked-in student requests their participation certificate once the event (which
+      // must have certificates enabled) has ended.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['certificateRequested', 'certificateRequestedAt'])
+        && resource.data.checkedIn == true
+        && request.resource.data.certificateRequested == true
+        && event().certificateEnabled == true
+        && request.time > event().endTime;
     }
 
     // ---------------- waitlist ----------------

@@ -24,6 +24,9 @@ class AuthService {
     required UserRole role,
     String? club,
     List<String> interests = const [],
+    int? age,
+    String? batch,
+    String? staffId,
   }) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -38,6 +41,9 @@ class AuthService {
       club: club,
       interests: interests,
       createdAt: DateTime.now(),
+      age: age,
+      batch: batch,
+      staffId: staffId,
     );
     await _firestore.collection('users').doc(uid).set(profile.toMap());
     return credential;

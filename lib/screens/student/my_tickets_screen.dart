@@ -10,8 +10,31 @@ import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import '../shared/scan_to_checkin_screen.dart';
 
-class MyTicketsScreen extends StatelessWidget {
+class MyTicketsScreen extends StatefulWidget {
   const MyTicketsScreen({super.key});
+
+  @override
+  State<MyTicketsScreen> createState() => _MyTicketsScreenState();
+}
+
+class _MyTicketsScreenState extends State<MyTicketsScreen> {
+  final Set<String> _requestingCertificateFor = {};
+
+  Future<void> _requestCertificate(FirestoreService firestore, String eventId, String userId) async {
+    setState(() => _requestingCertificateFor.add(eventId));
+    try {
+      await firestore.requestCertificate(eventId: eventId, userId: userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Certificate requested! The organizer will follow up.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _requestingCertificateFor.remove(eventId));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +122,11 @@ class MyTicketsScreen extends StatelessWidget {
                     builder: (context, eventSnapshot) {
                       final event = eventSnapshot.data;
                       if (event == null) return const SizedBox.shrink();
+
+                      final certificateAvailable =
+                          registration.checkedIn && event.certificateEnabled && !DateTime.now().isBefore(event.endTime);
+                      final requestingCertificate = _requestingCertificateFor.contains(event.id);
+
                       return Card(
                         child: ListTile(
                           leading: Icon(
@@ -109,15 +137,34 @@ class MyTicketsScreen extends StatelessWidget {
                           subtitle: Text(
                             '${event.venue} · ${DateFormat('MMM d, h:mm a').format(event.startTime)}',
                           ),
-                          trailing: registration.checkedIn
-                              ? const Chip(label: Text('Checked in'))
-                              : FilledButton.icon(
+                          trailing: !registration.checkedIn
+                              ? FilledButton.icon(
                                   icon: const Icon(Icons.qr_code_scanner, size: 18),
                                   label: const Text('Scan'),
                                   onPressed: () => Navigator.of(context).push(
                                     MaterialPageRoute(builder: (_) => ScanToCheckinScreen(event: event)),
                                   ),
-                                ),
+                                )
+                              : !certificateAvailable
+                                  ? const Chip(label: Text('Checked in'))
+                                  : registration.certificateRequested
+                                      ? const Chip(
+                                          label: Text('Certificate requested'),
+                                          avatar: Icon(Icons.workspace_premium, size: 18),
+                                        )
+                                      : OutlinedButton.icon(
+                                          icon: const Icon(Icons.workspace_premium, size: 18),
+                                          label: requestingCertificate
+                                              ? const SizedBox(
+                                                  height: 16,
+                                                  width: 16,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                )
+                                              : const Text('Get Certificate'),
+                                          onPressed: requestingCertificate
+                                              ? null
+                                              : () => _requestCertificate(firestore, event.id, userId),
+                                        ),
                         ),
                       );
                     },
