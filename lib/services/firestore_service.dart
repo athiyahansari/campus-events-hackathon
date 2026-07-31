@@ -88,6 +88,12 @@ class FirestoreService {
     });
   }
 
+  Stream<RegistrationModel?> watchRegistration({required String eventId, required String userId}) {
+    return _registrations.doc('${eventId}_$userId').snapshots().map(
+          (d) => d.exists ? RegistrationModel.fromMap(d.id, d.data()!) : null,
+        );
+  }
+
   Stream<List<RegistrationModel>> eventRegistrations(String eventId) {
     return _registrations
         .where('eventId', isEqualTo: eventId)
