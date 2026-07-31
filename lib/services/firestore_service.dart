@@ -73,72 +73,94 @@ class FirestoreService {
     return _users.doc(uid).update({'organizerApproved': approved});
   }
 
-  Future<void> seedDemoData() async {
+  /// Creates three demo events (live / upcoming / archived) owned by the calling
+  /// organizer.
+  ///
+  /// Everything here is written the way the app itself would write it, so it
+  /// passes `firestore.rules`: the events belong to [organizerId], are
+  /// categorised under that organizer's own [club], and start with zero
+  /// registration counts (the rules explicitly reject non-zero counts on
+  /// create). The archived one is created published and then transitioned,
+  /// because `create` only permits draft/published.
+  ///
+  /// Counts are deliberately left at zero rather than faked — inflated numbers
+  /// with no matching registration documents would show up as an empty
+  /// attendee list on the manage-event screen.
+  Future<void> seedDemoData({required String organizerId, required String club}) async {
     final now = DateTime.now();
-    
-    // 1. Live Event with QR Code Active
-    await _events.add({
-      'title': 'APIIT Annual Tech Summit 2026',
-      'description': 'Join leading industry experts, software engineers, and tech founders for keynotes and live demos on AI and Mobile Development.',
-      'category': 'Computing School',
-      'venue': 'Main Auditorium, Block A',
-      'startTime': Timestamp.fromDate(now.subtract(const Duration(minutes: 30))),
-      'endTime': Timestamp.fromDate(now.add(const Duration(hours: 3))),
-      'capacity': 50,
-      'registeredCount': 18,
-      'checkedInCount': 12,
-      'bannerImageUrl': 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80',
-      'organizerId': 'demo-organizer',
-      'status': 'published',
-      'archivePhotos': [],
-      'archiveSummary': null,
-      'createdAt': FieldValue.serverTimestamp(),
-      'activeCheckinToken': 'demo-checkin-token-999',
-      'tokenGeneratedAt': Timestamp.fromDate(now),
-      'certificateEnabled': true,
-    });
 
-    // 2. Upcoming Event
-    await _events.add({
-      'title': 'Business & Startup Pitch Night',
-      'description': 'Watch student entrepreneurs pitch their innovative startup ideas to real venture capitalists and angel investors.',
-      'category': 'Business School',
-      'venue': 'Conference Hall 2',
-      'startTime': Timestamp.fromDate(now.add(const Duration(days: 1))),
-      'endTime': Timestamp.fromDate(now.add(const Duration(days: 1, hours: 3))),
-      'capacity': 40,
-      'registeredCount': 25,
-      'checkedInCount': 0,
-      'bannerImageUrl': 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&q=80',
-      'organizerId': 'demo-organizer',
-      'status': 'published',
-      'archivePhotos': [],
-      'archiveSummary': null,
-      'createdAt': FieldValue.serverTimestamp(),
-      'certificateEnabled': true,
-    });
+    Map<String, dynamic> base({
+      required String title,
+      required String description,
+      required String venue,
+      required DateTime start,
+      required DateTime end,
+      required int capacity,
+      String? banner,
+    }) {
+      return {
+        'title': title,
+        'description': description,
+        'category': club,
+        'venue': venue,
+        'startTime': Timestamp.fromDate(start),
+        'endTime': Timestamp.fromDate(end),
+        'capacity': capacity,
+        'registeredCount': 0,
+        'checkedInCount': 0,
+        'waitlistCount': 0,
+        'bannerImageUrl': banner,
+        'organizerId': organizerId,
+        'status': 'published',
+        'archivePhotos': <String>[],
+        'archiveSummary': null,
+        'createdAt': FieldValue.serverTimestamp(),
+        'certificateEnabled': true,
+      };
+    }
 
-    // 3. Archived Event
-    await _events.add({
-      'title': 'Inter-University Game Jam 2026',
-      'description': '48-hour continuous game creation challenge open to all skill levels.',
-      'category': 'Computing School',
-      'venue': 'APIIT Tech Hub',
-      'startTime': Timestamp.fromDate(now.subtract(const Duration(days: 5))),
-      'endTime': Timestamp.fromDate(now.subtract(const Duration(days: 3))),
-      'capacity': 100,
-      'registeredCount': 85,
-      'checkedInCount': 80,
-      'bannerImageUrl': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
-      'organizerId': 'demo-organizer',
+    // 1. Happening right now — good for demoing the live check-in QR.
+    await _events.add(base(
+      title: 'Annual Tech Summit 2026',
+      description:
+          'Keynotes and live demos on AI and mobile development from industry engineers and founders.',
+      venue: 'Main Auditorium, Block A',
+      start: now.subtract(const Duration(minutes: 30)),
+      end: now.add(const Duration(hours: 3)),
+      capacity: 50,
+      banner: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80',
+    ));
+
+    // 2. Tomorrow — good for demoing registration and the day-before reminder.
+    await _events.add(base(
+      title: 'Startup Pitch Night',
+      description:
+          'Student entrepreneurs pitch their ideas to venture capitalists and angel investors.',
+      venue: 'Conference Hall 2',
+      start: now.add(const Duration(days: 1)),
+      end: now.add(const Duration(days: 1, hours: 3)),
+      capacity: 40,
+      banner: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&q=80',
+    ));
+
+    // 3. Already finished, then archived — populates the Archive tab.
+    final archived = await _events.add(base(
+      title: 'Inter-University Game Jam',
+      description: '48-hour game creation challenge open to all skill levels.',
+      venue: 'Tech Hub',
+      start: now.subtract(const Duration(days: 5)),
+      end: now.subtract(const Duration(days: 3)),
+      capacity: 100,
+      banner: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
+    ));
+    await archived.update({
       'status': 'archived',
+      'archiveSummary':
+          '15 game prototypes were completed and presented. First place went to Team ByteCraft.',
       'archivePhotos': [
         'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
         'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&q=80',
       ],
-      'archiveSummary': 'Huge success! 15 game prototypes were completed and presented. First place went to Team ByteCraft!',
-      'createdAt': FieldValue.serverTimestamp(),
-      'certificateEnabled': true,
     });
   }
 

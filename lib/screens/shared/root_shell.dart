@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../services/push_notification_service.dart';
+import '../../theme/app_theme.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../auth/login_screen.dart';
 import '../organizer/organizer_dashboard_screen.dart';
 import '../student/my_tickets_screen.dart';
 import 'archive_screen.dart';
+import 'calendar_screen.dart';
 import 'profile_screen.dart';
 import 'public_feed_screen.dart';
 
@@ -43,90 +45,116 @@ class _RootShellState extends State<RootShell> {
       });
     }
 
-    if (!isAuthenticated) {
-      return const LoginScreen();
-    }
-
-    if (auth.isAdmin) {
+    if (isAuthenticated && auth.isAdmin) {
       return const AdminDashboardScreen();
     }
 
-    if (isOrganizer) {
-      return DefaultTabController(
-        length: 6,
-        initialIndex: 5, // Start on Dashboard
-        child: Scaffold(
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF1E2F4D),
-            foregroundColor: Colors.white,
-            title: const Row(
-              children: [
-                Icon(Icons.event_note, color: Colors.blueAccent),
-                SizedBox(width: 8),
-                Text('UniEvents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-              ],
-            ),
-            actions: [
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.orange),
-                padding: const EdgeInsets.all(8),
-                child: const Text('O', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              TextButton(
-                onPressed: () => context.read<AuthProvider>().signOut(),
-                child: const Text('Sign out', style: TextStyle(color: Colors.white70)),
-              ),
-            ],
-            bottom: const TabBar(
-              isScrollable: true,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
-              tabs: [
-                Tab(icon: Icon(Icons.home, size: 20), text: 'Discover'),
-                Tab(icon: Icon(Icons.calendar_month, size: 20), text: 'Calendar'),
-                Tab(icon: Icon(Icons.map, size: 20), text: 'Map'),
-                Tab(icon: Icon(Icons.history, size: 20), text: 'Archive'),
-                Tab(icon: Icon(Icons.info, size: 20), text: 'About'),
-                Tab(icon: Icon(Icons.dashboard, size: 20), text: 'Dashboard'),
-              ],
-            ),
-          ),
-          body: const TabBarView(
-            children: [
-              PublicFeedScreen(),
-              Center(child: Text('Calendar - Coming Soon')),
-              Center(child: Text('Map - Coming Soon')),
-              ArchiveScreen(),
-              Center(child: Text('About - Coming Soon')),
-              OrganizerDashboardScreen(),
-            ],
-          ),
-        ),
-      );
+    if (isAuthenticated && isOrganizer) {
+      return const _OrganizerShell();
     }
 
-    // Student View (Bottom Navigation)
-    final studentDestinations = <_ShellTab>[
-      _ShellTab('Feed', Icons.calendar_today, const PublicFeedScreen()),
-      _ShellTab('Archive', Icons.history, const ArchiveScreen()),
-      _ShellTab('My Tickets', Icons.qr_code, const MyTicketsScreen()),
-      _ShellTab('Profile', Icons.person, const ProfileScreen()),
+    // Students AND signed-out guests share the same browsing shell — guests can
+    // read the feed and archive, and hit a "Log In" tab instead of My Tickets /
+    // Profile. Gating the whole app behind login previously made it impossible
+    // to browse events without an account.
+    final destinations = <_ShellTab>[
+      _ShellTab('Feed', Icons.home_outlined, Icons.home, const PublicFeedScreen()),
+      _ShellTab('Calendar', Icons.calendar_month_outlined, Icons.calendar_month, const CalendarScreen()),
+      _ShellTab('Archive', Icons.history_outlined, Icons.history, const ArchiveScreen()),
+      if (isAuthenticated)
+        _ShellTab('My Tickets', Icons.confirmation_number_outlined, Icons.confirmation_number, const MyTicketsScreen()),
+      if (isAuthenticated)
+        _ShellTab('Profile', Icons.person_outline, Icons.person, const ProfileScreen())
+      else
+        _ShellTab('Log In', Icons.login_outlined, Icons.login, const LoginScreen()),
     ];
 
-    final safeIndex = _index < studentDestinations.length ? _index : 0;
+    final safeIndex = _index < destinations.length ? _index : 0;
 
     return Scaffold(
-      body: studentDestinations[safeIndex].screen,
+      body: IndexedStack(
+        index: safeIndex,
+        children: destinations.map((d) => d.screen).toList(),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: safeIndex,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: studentDestinations
-            .map((d) => NavigationDestination(icon: Icon(d.icon), label: d.label))
+        destinations: destinations
+            .map((d) => NavigationDestination(
+                  icon: Icon(d.icon),
+                  selectedIcon: Icon(d.selectedIcon),
+                  label: d.label,
+                ))
             .toList(),
-        backgroundColor: const Color(0xFFFAF9FB),
-        indicatorColor: const Color(0xFFEFE8FC),
+      ),
+    );
+  }
+}
+
+/// Organizer chrome. The Calendar tab gives organizers a visual schedule of all events.
+class _OrganizerShell extends StatelessWidget {
+  const _OrganizerShell();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final profile = context.watch<AuthProvider>().userProfile;
+    final initial = (profile?.name.trim().isNotEmpty ?? false)
+        ? profile!.name.trim()[0].toUpperCase()
+        : 'O';
+
+    return DefaultTabController(
+      length: 4,
+      initialIndex: 3, // Land on Dashboard — an organizer's home base.
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Icon(Icons.event_note, color: p.accent),
+              const SizedBox(width: AppSpacing.sm),
+              const Text('UniEvents'),
+            ],
+          ),
+          actions: [
+            Container(
+              margin: const EdgeInsets.only(right: AppSpacing.sm),
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: p.accent),
+              child: Text(
+                initial,
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Sign out',
+              icon: const Icon(Icons.logout),
+              onPressed: () => context.read<AuthProvider>().signOut(),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
+          bottom: TabBar(
+            labelColor: p.onAppBar,
+            unselectedLabelColor: p.onAppBar.withValues(alpha: 0.6),
+            indicatorColor: p.accent,
+            indicatorWeight: 3,
+            tabs: const [
+              Tab(icon: Icon(Icons.home_outlined, size: 20), text: 'Discover'),
+              Tab(icon: Icon(Icons.calendar_month_outlined, size: 20), text: 'Calendar'),
+              Tab(icon: Icon(Icons.history, size: 20), text: 'Archive'),
+              Tab(icon: Icon(Icons.dashboard_outlined, size: 20), text: 'Dashboard'),
+            ],
+          ),
+        ),
+        body: const TabBarView(
+          children: [
+            PublicFeedScreen(embedded: true),
+            CalendarScreen(embedded: true),
+            ArchiveScreen(embedded: true),
+            OrganizerDashboardScreen(),
+          ],
+        ),
       ),
     );
   }
@@ -135,7 +163,8 @@ class _RootShellState extends State<RootShell> {
 class _ShellTab {
   final String label;
   final IconData icon;
+  final IconData selectedIcon;
   final Widget screen;
 
-  _ShellTab(this.label, this.icon, this.screen);
+  _ShellTab(this.label, this.icon, this.selectedIcon, this.screen);
 }

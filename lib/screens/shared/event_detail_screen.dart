@@ -8,10 +8,11 @@ import '../../models/registration_model.dart';
 import '../../models/waitlist_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/event_image_helper.dart';
+import '../../widgets/app_widgets.dart';
 import '../auth/login_screen.dart';
 import 'scan_to_checkin_screen.dart';
-
-import '../../utils/event_image_helper.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -26,41 +27,36 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _registering = false;
   bool _requestingCertificate = false;
 
-  Future<void> _requestCertificate(String userId) async {
+  Future<void> _requestCertificate(String eventId, String userId) async {
     setState(() => _requestingCertificate = true);
     final firestore = context.read<FirestoreService>();
     try {
-      await firestore.requestCertificate(eventId: widget.event.id, userId: userId);
+      await firestore.requestCertificate(eventId: eventId, userId: userId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Certificate requested! The organizer will follow up.')),
-      );
+      showAppSnack(context, 'Certificate requested — the organizer will follow up.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      showAppSnack(context, e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _requestingCertificate = false);
     }
   }
 
-  Future<void> _register(String userId) async {
+  Future<void> _register(String eventId, String userId) async {
     setState(() => _registering = true);
     final firestore = context.read<FirestoreService>();
     try {
-      final outcome = await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
+      final outcome = await firestore.registerForEvent(eventId: eventId, userId: userId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            outcome == RegistrationOutcome.registered
-                ? "You're registered! We'll see you there."
-                : "This event is full — you've been added to the waitlist. We'll notify you if a seat opens up.",
-          ),
-        ),
+      showAppSnack(
+        context,
+        outcome == RegistrationOutcome.registered
+            ? "You're registered! We'll see you there."
+            : "Event is full — you've been added to the waitlist. We'll notify you if a seat opens.",
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      showAppSnack(context, e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _registering = false);
     }
@@ -68,26 +64,43 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final event = widget.event;
-    final auth = context.watch<AuthProvider>();
     final firestore = context.read<FirestoreService>();
-    final dateFormat = DateFormat('MMM d, yyyy · h:mm a');
+
+    // Watch the event doc rather than rendering the snapshot we were pushed
+    // with — otherwise capacity/spots-left stay frozen after registering.
+    return StreamBuilder<EventModel?>(
+      stream: firestore.watchEvent(widget.event.id),
+      initialData: widget.event,
+      builder: (context, snapshot) {
+        final event = snapshot.data ?? widget.event;
+        return _buildScaffold(context, event, firestore);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, EventModel event, FirestoreService firestore) {
+    final p = context.palette;
+    final auth = context.watch<AuthProvider>();
+    final dateFormat = DateFormat('EEE, MMM d, yyyy · h:mm a');
     final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl, eventId: event.id);
-    
+    final now = DateTime.now();
+
     final isLive = event.status == EventStatus.published &&
-        event.startTime.isBefore(DateTime.now().add(const Duration(hours: 1))) &&
-        event.endTime.isAfter(DateTime.now());
-        
+        event.startTime.isBefore(now) &&
+        event.endTime.isAfter(now);
+    final hasEnded = event.endTime.isBefore(now);
+
     final progress = event.capacity > 0 ? (event.registeredCount / event.capacity).clamp(0.0, 1.0) : 0.0;
-    final spotsLeft = event.capacity - event.registeredCount;
+    final spotsLeft = (event.capacity - event.registeredCount).clamp(0, event.capacity);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: p.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 250,
+            expandedHeight: 240,
             pinned: true,
+            backgroundColor: p.appBar,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
@@ -95,165 +108,165 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   CachedNetworkImage(
                     imageUrl: bannerUrl,
                     fit: BoxFit.cover,
-                    errorWidget: (context, url, error) => Container(
-                      color: const Color(0xFF1E2F4D),
-                      child: const Center(
-                        child: Icon(Icons.event, size: 64, color: Colors.white54),
-                      ),
+                    placeholder: (_, _) => Container(color: p.surfaceAlt),
+                    errorWidget: (_, _, _) => Container(
+                      color: AppBrand.navy,
+                      child: const Center(child: Icon(Icons.event, size: 56, color: Colors.white54)),
                     ),
                   ),
-                  Container(
+                  const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [Colors.black54, Colors.transparent, Colors.black87],
-                        stops: const [0.0, 0.5, 1.0],
+                        stops: [0.0, 0.45, 1.0],
                       ),
                     ),
                   ),
-                  if (isLive)
-                    Positioned(
-                      bottom: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
-                            SizedBox(width: 4),
-                            Text('Live Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                          ],
-                        ),
-                      ),
+                  Positioned(
+                    bottom: AppSpacing.lg,
+                    left: AppSpacing.lg,
+                    child: Row(
+                      children: [
+                        if (isLive)
+                          const AppTag(label: 'Live Now', color: Color(0xFF1E8E3E), icon: Icons.circle, solid: true)
+                        else if (hasEnded)
+                          AppTag(label: 'Ended', color: p.textSecondary, solid: true)
+                        else if (event.isFull)
+                          AppTag(label: 'Fully Booked', color: p.danger, solid: true),
+                      ],
                     ),
+                  ),
                 ],
               ),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(event.category, style: const TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(height: 16),
+                  AppTag(label: event.category, color: p.info),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     event.title,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D)),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: p.textPrimary, height: 1.25),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Location and Date
-                  _InfoRow(icon: Icons.location_on, iconColor: Colors.pinkAccent, text: event.venue),
-                  const SizedBox(height: 12),
-                  _InfoRow(icon: Icons.calendar_month, iconColor: Colors.blueAccent, text: dateFormat.format(event.startTime)),
-                  const SizedBox(height: 24),
-                  
-                  // Capacity Progress
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(event.isFull ? Colors.red : Colors.blueAccent),
-                    ),
+                  const SizedBox(height: AppSpacing.xl),
+                  _InfoRow(icon: Icons.location_on_outlined, iconColor: p.danger, text: event.venue),
+                  const SizedBox(height: AppSpacing.md),
+                  _InfoRow(
+                    icon: Icons.calendar_month_outlined,
+                    iconColor: p.info,
+                    text: dateFormat.format(event.startTime),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.md),
+                  _InfoRow(
+                    icon: Icons.workspace_premium_outlined,
+                    iconColor: p.warning,
+                    text: event.certificateEnabled
+                        ? 'Participation certificate available'
+                        : 'No certificate for this event',
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // Capacity
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        event.isFull ? 'Fully Booked' : '$spotsLeft spots left',
+                        event.isFull ? 'Fully booked' : '$spotsLeft of ${event.capacity} spots left',
                         style: TextStyle(
                           fontSize: 14,
-                          color: event.isFull ? Colors.red : Colors.black87,
-                          fontWeight: event.isFull ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: FontWeight.w600,
+                          color: event.isFull ? p.danger : p.textPrimary,
                         ),
                       ),
-                      Row(
-                        children: [
-                          // Fake avatars for visual effect
-                          ...List.generate(3, (index) => Align(
-                            widthFactor: 0.6,
-                            child: CircleAvatar(
-                              radius: 12,
-                              backgroundColor: Colors.white,
-                              child: CircleAvatar(
-                                radius: 10,
-                                backgroundImage: CachedNetworkImageProvider('https://i.pravatar.cc/100?img=${index + 1}'),
-                              ),
-                            ),
-                          )),
-                          const SizedBox(width: 8),
-                          Text(
-                            '+${event.registeredCount} going',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Text(
+                        '${event.registeredCount} registered',
+                        style: TextStyle(fontSize: 13, color: p.textSecondary),
                       ),
                     ],
                   ),
-                  
-                  const SizedBox(height: 32),
-                  const Text('About Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D))),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.sm),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 8,
+                      backgroundColor: p.surfaceAlt,
+                      valueColor: AlwaysStoppedAnimation<Color>(event.isFull ? p.danger : p.accent),
+                    ),
+                  ),
+                  if (event.waitlistCount > 0) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Icon(Icons.hourglass_top, size: 14, color: p.warning),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '${event.waitlistCount} on the waitlist',
+                          style: TextStyle(fontSize: 12, color: p.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: AppSpacing.xxl),
+                  Text(
+                    'About this event',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: p.textPrimary),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     event.description,
-                    style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.5),
+                    style: TextStyle(fontSize: 15, color: p.textSecondary, height: 1.55),
                   ),
-                  
+
                   if (event.status == EventStatus.archived) ...[
-                    const SizedBox(height: 32),
-                    const Text('Archive Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D))),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.xxl),
+                    Text(
+                      'Event recap',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: p.textPrimary),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     if (event.archiveSummary != null && event.archiveSummary!.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.1)),
+                          color: p.success.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          border: Border.all(color: p.success.withValues(alpha: 0.2)),
                         ),
                         child: Text(
                           event.archiveSummary!,
-                          style: const TextStyle(fontSize: 14, color: Colors.green, height: 1.5),
+                          style: TextStyle(fontSize: 14, color: p.textPrimary, height: 1.5),
                         ),
                       ),
                     if (event.archivePhotos.isNotEmpty) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.lg),
                       SizedBox(
                         height: 120,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: event.archivePhotos.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 12),
+                          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
                           itemBuilder: (context, i) => ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             child: CachedNetworkImage(
                               imageUrl: event.archivePhotos[i],
                               width: 160,
                               height: 120,
                               fit: BoxFit.cover,
+                              placeholder: (_, _) => Container(width: 160, height: 120, color: p.surfaceAlt),
                               errorWidget: (_, _, _) => Container(
                                 width: 160,
                                 height: 120,
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.image_not_supported),
+                                color: p.surfaceAlt,
+                                child: Icon(Icons.image_not_supported, color: p.textSecondary),
                               ),
                             ),
                           ),
@@ -261,15 +274,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ],
                   ],
-                  
-                  const SizedBox(height: 100), // Space for bottom action bar
+
+                  // Breathing room so the pinned action bar never covers content.
+                  const SizedBox(height: 110),
                 ],
               ),
             ),
           ),
         ],
       ),
-      bottomSheet: _buildAction(context, event, auth, firestore),
+      bottomSheet: _ActionBar(
+        child: _buildAction(context, event, auth, firestore),
+      ),
     );
   }
 
@@ -279,145 +295,170 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     AuthProvider auth,
     FirestoreService firestore,
   ) {
+    final p = context.palette;
+
     if (auth.status != AuthStatus.authenticated) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: FilledButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF3366FF),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
-            child: const Text('Log in to register', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: FilledButton.icon(
+          icon: const Icon(Icons.login),
+          label: const Text('Log in to register'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
           ),
         ),
       );
     }
 
-    if (auth.isOrganizer) {
-      return const SizedBox.shrink();
+    if (auth.isOrganizer || auth.isAdmin) {
+      return _StatusPill(
+        text: auth.isAdmin ? 'Viewing as admin' : 'Viewing as organizer',
+        color: p.textSecondary,
+        icon: Icons.visibility_outlined,
+      );
     }
 
     final userId = auth.firebaseUser!.uid;
+    final hasEnded = event.endTime.isBefore(DateTime.now());
 
     return StreamBuilder<RegistrationModel?>(
       stream: firestore.watchRegistration(eventId: event.id, userId: userId),
       builder: (context, snapshot) {
         final registration = snapshot.data;
-        
-        Widget actionButton;
-        
+
         if (registration != null) {
           if (registration.checkedIn) {
-            if (!event.certificateEnabled || DateTime.now().isBefore(event.endTime)) {
-              actionButton = const _StatusButton(text: 'Checked in', color: Colors.green, icon: Icons.check_circle);
-            } else if (registration.certificateRequested) {
-              actionButton = const _StatusButton(text: 'Certificate requested', color: Colors.orange, icon: Icons.workspace_premium);
-            } else {
-              actionButton = SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: FilledButton.icon(
-                  icon: _requestingCertificate 
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.workspace_premium),
-                  label: const Text('Request Certificate', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  onPressed: _requestingCertificate ? null : () => _requestCertificate(userId),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                ),
+            final certificateReady = event.certificateEnabled && hasEnded;
+            if (!certificateReady) {
+              return _StatusPill(text: 'Checked in', color: p.success, icon: Icons.check_circle);
+            }
+            if (registration.certificateRequested) {
+              return _StatusPill(
+                text: 'Certificate requested',
+                color: p.warning,
+                icon: Icons.workspace_premium,
               );
             }
-          } else {
-            actionButton = SizedBox(
+            return SizedBox(
               width: double.infinity,
-              height: 56,
+              height: 52,
               child: FilledButton.icon(
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Scan to Check In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ScanToCheckinScreen(event: event)),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3366FF),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
+                style: FilledButton.styleFrom(backgroundColor: p.warning),
+                icon: _requestingCertificate
+                    ? const SizedBox(
+                        width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.workspace_premium),
+                label: const Text('Request certificate'),
+                onPressed: _requestingCertificate ? null : () => _requestCertificate(event.id, userId),
               ),
             );
           }
-        } else {
-          actionButton = StreamBuilder<WaitlistModel?>(
-            stream: firestore.watchWaitlistEntry(eventId: event.id, userId: userId),
-            builder: (context, waitlistSnapshot) {
-              if (waitlistSnapshot.data != null) {
-                return const _StatusButton(text: "You're on the waitlist", color: Colors.orange, icon: Icons.hourglass_top);
-              }
 
-              final disabled = _registering;
-              return SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: FilledButton(
-                  onPressed: disabled ? null : () => _register(userId),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: event.isFull ? Colors.orange : const Color(0xFF3366FF),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: _registering
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(event.isFull ? 'Join Waitlist' : 'Register Now', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              );
-            },
+          if (hasEnded) {
+            return _StatusPill(text: 'You missed this one', color: p.textSecondary, icon: Icons.event_busy);
+          }
+
+          return SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton.icon(
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Scan to check in'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ScanToCheckinScreen(event: event)),
+              ),
+            ),
           );
         }
 
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
-          ),
-          child: actionButton,
+        return StreamBuilder<WaitlistModel?>(
+          stream: firestore.watchWaitlistEntry(eventId: event.id, userId: userId),
+          builder: (context, waitlistSnapshot) {
+            if (waitlistSnapshot.data != null) {
+              return _StatusPill(
+                text: "You're on the waitlist",
+                color: p.warning,
+                icon: Icons.hourglass_top,
+              );
+            }
+
+            if (hasEnded) {
+              return _StatusPill(
+                text: 'Registration closed',
+                color: p.textSecondary,
+                icon: Icons.lock_outline,
+              );
+            }
+
+            return SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: event.isFull ? p.warning : p.accent),
+                onPressed: _registering ? null : () => _register(event.id, userId),
+                child: _registering
+                    ? const SizedBox(
+                        height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(event.isFull ? 'Join waitlist' : 'Register now'),
+              ),
+            );
+          },
         );
       },
     );
   }
 }
 
-class _StatusButton extends StatelessWidget {
+/// Pinned bottom bar. Wrapped in SafeArea so it clears the gesture bar.
+class _ActionBar extends StatelessWidget {
+  final Widget child;
+
+  const _ActionBar({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
   final String text;
   final Color color;
   final IconData icon;
-  
-  const _StatusButton({required this.text, required this.color, required this.icon});
-  
+
+  const _StatusPill({required this.text, required this.color, required this.icon});
+
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 56,
+      height: 52,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 8),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
         ],
       ),
     );
@@ -433,21 +474,22 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: iconColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: Icon(icon, size: 20, color: iconColor),
+          child: Icon(icon, size: 18, color: iconColor),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 14, color: p.textPrimary, fontWeight: FontWeight.w500),
           ),
         ),
       ],

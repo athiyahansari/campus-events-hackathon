@@ -2,16 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/clubs.dart';
+import '../../widgets/app_widgets.dart';
 import '../../widgets/event_card.dart';
 import 'event_detail_screen.dart';
 
 enum _Timeframe { all, today, thisWeek }
 
 class PublicFeedScreen extends StatefulWidget {
-  const PublicFeedScreen({super.key});
+  /// When nested inside the organizer's TabBarView the surrounding shell already
+  /// provides an AppBar, so this screen must not draw its own.
+  final bool embedded;
+
+  const PublicFeedScreen({super.key, this.embedded = false});
 
   @override
   State<PublicFeedScreen> createState() => _PublicFeedScreenState();
@@ -37,16 +44,30 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
 
   List<EventModel> _applyFilters(List<EventModel> events) {
     final now = DateTime.now();
-    final query = _searchController.text.toLowerCase();
-    
+    final query = _searchController.text.trim().toLowerCase();
+
     return events.where((e) {
       if (_categoryFilter != null && e.category != _categoryFilter) return false;
       if (!_matchesTimeframe(e, now)) return false;
-      if (query.isNotEmpty && !e.title.toLowerCase().contains(query) && !e.venue.toLowerCase().contains(query)) {
+      if (query.isNotEmpty &&
+          !e.title.toLowerCase().contains(query) &&
+          !e.venue.toLowerCase().contains(query) &&
+          !e.category.toLowerCase().contains(query)) {
         return false;
       }
       return true;
     }).toList();
+  }
+
+  bool get _hasActiveFilters =>
+      _categoryFilter != null || _timeframe != _Timeframe.all || _searchController.text.trim().isNotEmpty;
+
+  void _clearFilters() {
+    setState(() {
+      _categoryFilter = null;
+      _timeframe = _Timeframe.all;
+      _searchController.clear();
+    });
   }
 
   @override
@@ -58,14 +79,19 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final firestore = context.read<FirestoreService>();
+    final p = context.palette;
+    final isGuest = context.watch<AuthProvider>().status != AuthStatus.authenticated;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: p.background,
       body: StreamBuilder<List<EventModel>>(
         stream: firestore.publicEventFeed(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return AppErrorState(
+              message: 'We could not reach the events service. Check your connection and try again.',
+              onRetry: () => setState(() {}),
+            );
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -74,187 +100,123 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
           final allEvents = snapshot.data!;
           final filteredEvents = _applyFilters(allEvents);
 
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                backgroundColor: const Color(0xFF1E2F4D),
-                title: const Row(
-                  children: [
-                    Icon(Icons.event_note, color: Colors.blueAccent),
-                    SizedBox(width: 8),
-                    Text('UniEvents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.dataset, color: Colors.orangeAccent),
-                    tooltip: 'Seed Demo Events',
-                    onPressed: () async {
-                      await context.read<FirestoreService>().seedDemoData();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Demo Events (Live, Upcoming & Archived) created!')),
-                        );
-                      }
-                    },
-                  ),
-                  Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, _) => IconButton(
-                      icon: Icon(
-                        themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                        color: Colors.white,
-                      ),
-                      tooltip: 'Toggle Theme',
-                      onPressed: () => themeProvider.toggleTheme(),
+          return RefreshIndicator(
+            onRefresh: () async {
+              // Firestore streams are already live; this just gives users the
+              // expected pull-to-refresh affordance and re-runs the filters.
+              await Future<void>.delayed(const Duration(milliseconds: 400));
+              if (mounted) setState(() {});
+            },
+            child: CustomScrollView(
+              slivers: [
+                if (!widget.embedded)
+                  SliverAppBar(
+                    floating: true,
+                    title: Row(
+                      children: [
+                        Icon(Icons.event_note, color: p.accent),
+                        const SizedBox(width: AppSpacing.sm),
+                        const Text('UniEvents'),
+                      ],
                     ),
-                  ),
-                ],
-                floating: true,
-                pinned: false,
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _StatBox(
-                          icon: Icons.calendar_month,
-                          iconColor: Colors.blueAccent,
-                          count: '${allEvents.length}',
-                          label: 'Upcoming\nEvents',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: _StatBox(
-                          icon: Icons.folder,
-                          iconColor: Colors.orange,
-                          count: '3', // Mock for UI demo
-                          label: 'Past\nEvents',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: _StatBox(
-                          icon: Icons.people,
-                          iconColor: Colors.purple,
-                          count: '1,378', // Mock for UI demo
-                          label: 'Registrations',
+                    actions: [
+                      Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, _) => IconButton(
+                          icon: Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+                          tooltip: themeProvider.isDarkMode ? 'Switch to light mode' : 'Switch to dark mode',
+                          onPressed: themeProvider.toggleTheme,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        // Search Bar
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextField(
+                if (isGuest) const SliverToBoxAdapter(child: _GuestBanner()),
+                SliverToBoxAdapter(child: _FeedStats(publishedEvents: allEvents)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
+                    child: AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        children: [
+                          TextField(
                             controller: _searchController,
                             onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                              hintText: 'Search events, venues, organisers...',
-                              prefixIcon: Icon(Icons.search, color: Colors.black45),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: 'Search events, venues, categories…',
+                              prefixIcon: Icon(Icons.search, color: p.textSecondary),
+                              suffixIcon: _searchController.text.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      icon: Icon(Icons.close, color: p.textSecondary),
+                                      tooltip: 'Clear search',
+                                      onPressed: () => setState(() => _searchController.clear()),
+                                    ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Filter Chips
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _FilterChip(
-                                label: 'All',
-                                isSelected: _categoryFilter == null && _timeframe == _Timeframe.all,
-                                onTap: () => setState(() {
-                                  _categoryFilter = null;
-                                  _timeframe = _Timeframe.all;
-                                }),
-                              ),
-                              ...kCampusCategories.map((c) => Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: _FilterChip(
-                                  label: c,
-                                  isSelected: _categoryFilter == c,
-                                  onTap: () => setState(() {
-                                    if (_categoryFilter == c) {
-                                      _categoryFilter = null;
-                                    } else {
-                                      _categoryFilter = c;
-                                    }
-                                  }),
+                          const SizedBox(height: AppSpacing.md),
+                          SizedBox(
+                            height: 36,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                AppFilterChip(
+                                  label: 'All',
+                                  isSelected: _categoryFilter == null && _timeframe == _Timeframe.all,
+                                  onTap: _clearFilters,
                                 ),
-                              )),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: _FilterChip(
+                                const SizedBox(width: AppSpacing.sm),
+                                AppFilterChip(
                                   label: 'Today',
                                   isSelected: _timeframe == _Timeframe.today,
-                                  onTap: () => setState(() {
-                                    if (_timeframe == _Timeframe.today) {
-                                      _timeframe = _Timeframe.all;
-                                    } else {
-                                      _timeframe = _Timeframe.today;
-                                    }
-                                  }),
+                                  onTap: () => setState(() => _timeframe =
+                                      _timeframe == _Timeframe.today ? _Timeframe.all : _Timeframe.today),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: _FilterChip(
+                                const SizedBox(width: AppSpacing.sm),
+                                AppFilterChip(
                                   label: 'This Week',
                                   isSelected: _timeframe == _Timeframe.thisWeek,
-                                  onTap: () => setState(() {
-                                    if (_timeframe == _Timeframe.thisWeek) {
-                                      _timeframe = _Timeframe.all;
-                                    } else {
-                                      _timeframe = _Timeframe.thisWeek;
-                                    }
-                                  }),
+                                  onTap: () => setState(() => _timeframe =
+                                      _timeframe == _Timeframe.thisWeek ? _Timeframe.all : _Timeframe.thisWeek),
                                 ),
-                              ),
-                            ],
+                                for (final c in kCampusCategories) ...[
+                                  const SizedBox(width: AppSpacing.sm),
+                                  AppFilterChip(
+                                    label: c,
+                                    isSelected: _categoryFilter == c,
+                                    onTap: () =>
+                                        setState(() => _categoryFilter = _categoryFilter == c ? null : c),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (filteredEvents.isEmpty)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(
-                      child: Text('No events found matching your filters.', style: TextStyle(color: Colors.black54)),
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
+                if (filteredEvents.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: allEvents.isEmpty
+                        ? const AppEmptyState(
+                            icon: Icons.event_busy,
+                            title: 'No events published yet',
+                            message: 'Once an organizer publishes an event it will show up here.',
+                          )
+                        : AppEmptyState(
+                            icon: Icons.search_off,
+                            title: 'No events match your filters',
+                            message: 'Try a different category, timeframe, or search term.',
+                            actionLabel: _hasActiveFilters ? 'Clear filters' : null,
+                            onAction: _hasActiveFilters ? _clearFilters : null,
+                          ),
+                  )
+                else
+                  SliverList.builder(
+                    itemCount: filteredEvents.length,
+                    itemBuilder: (context, index) {
                       final event = filteredEvents[index];
                       return EventCard(
                         event: event,
@@ -263,14 +225,110 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
                         ),
                       );
                     },
-                    childCount: filteredEvents.length,
                   ),
-                ),
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
-            ],
+                const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
+              ],
+            ),
           );
         },
       ),
+    );
+  }
+}
+
+class _GuestBanner extends StatelessWidget {
+  const _GuestBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: p.accent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: p.accent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.visibility_outlined, size: 18, color: p.accent),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                "You're browsing as a guest — log in to register for events.",
+                style: TextStyle(fontSize: 12, color: p.textPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Real counts derived from Firestore. These were previously hardcoded to
+/// "3" past events and "1,378" registrations — an obvious tell during a demo.
+class _FeedStats extends StatelessWidget {
+  final List<EventModel> publishedEvents;
+
+  const _FeedStats({required this.publishedEvents});
+
+  String _compact(int n) {
+    if (n < 1000) return '$n';
+    final thousands = n / 1000;
+    return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)}k';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final firestore = context.read<FirestoreService>();
+    final p = context.palette;
+    final now = DateTime.now();
+    final upcoming = publishedEvents.where((e) => e.endTime.isAfter(now)).length;
+
+    return StreamBuilder<List<EventModel>>(
+      stream: firestore.archivedEvents(),
+      builder: (context, snapshot) {
+        final archived = snapshot.data ?? const <EventModel>[];
+        final registrations = [...publishedEvents, ...archived]
+            .fold<int>(0, (sum, e) => sum + e.registeredCount);
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xs),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatBox(
+                  icon: Icons.calendar_month,
+                  iconColor: p.info,
+                  count: '$upcoming',
+                  label: 'Upcoming',
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _StatBox(
+                  icon: Icons.folder_outlined,
+                  iconColor: p.warning,
+                  count: '${archived.length}',
+                  label: 'Past',
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _StatBox(
+                  icon: Icons.people_outline,
+                  iconColor: p.highlight,
+                  count: _compact(registrations),
+                  label: 'Registrations',
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -285,70 +343,36 @@ class _StatBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
+        color: p.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: p.border),
+        boxShadow: context.cardShadow,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
             child: Icon(icon, color: iconColor, size: 18),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(count, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E2F4D))),
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 9, color: Colors.black54, height: 1.1),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(count, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: p.textPrimary)),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, color: p.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterChip({required this.label, required this.isSelected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3366FF) : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black87,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 12,
-          ),
-        ),
       ),
     );
   }
