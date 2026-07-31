@@ -42,7 +42,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _bannerUrlController = TextEditingController(text: existing?.bannerImageUrl ?? '');
     _startTime = existing?.startTime;
     _endTime = existing?.endTime;
-    _publishImmediately = existing == null || existing.status == EventStatus.published;
+    final organizerApproved = context.read<AuthProvider>().userProfile?.organizerApproved ?? false;
+    final canPublish = organizerApproved || existing?.status == EventStatus.published;
+    _publishImmediately = canPublish && (existing == null || existing.status == EventStatus.published);
     _certificateEnabled = existing?.certificateEnabled ?? false;
   }
 
@@ -91,6 +93,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final auth = context.read<AuthProvider>();
     final profile = auth.userProfile!;
     final firestore = context.read<FirestoreService>();
+    final canPublish = profile.organizerApproved || widget.existingEvent?.status == EventStatus.published;
+    final publishImmediately = _publishImmediately && canPublish;
 
     setState(() => _submitting = true);
     try {
@@ -103,7 +107,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'endTime': Timestamp.fromDate(_endTime!),
           'capacity': int.parse(_capacityController.text.trim()),
           'bannerImageUrl': _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
-          'status': eventStatusToString(_publishImmediately ? EventStatus.published : EventStatus.draft),
+          'status': eventStatusToString(publishImmediately ? EventStatus.published : EventStatus.draft),
           'certificateEnabled': _certificateEnabled,
         });
       } else {
@@ -121,7 +125,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           certificateEnabled: _certificateEnabled,
           bannerImageUrl: _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
           organizerId: auth.firebaseUser!.uid,
-          status: _publishImmediately ? EventStatus.published : EventStatus.draft,
+          status: publishImmediately ? EventStatus.published : EventStatus.draft,
           archivePhotos: const [],
           archiveSummary: null,
           createdAt: DateTime.now(),
@@ -146,7 +150,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final category = widget.existingEvent?.category ?? context.watch<AuthProvider>().userProfile?.club ?? '';
+    final profile = context.watch<AuthProvider>().userProfile;
+    final category = widget.existingEvent?.category ?? profile?.club ?? '';
+    // Once already published, keeping it published is fine even if approval is later revoked —
+    // only the transition INTO published requires an approved organizer account.
+    final canPublish = (profile?.organizerApproved ?? false) || widget.existingEvent?.status == EventStatus.published;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.isEditing ? 'Edit Event' : 'Create Event')),
@@ -225,9 +233,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Publish immediately'),
-              subtitle: const Text('Off = save as draft, visible only to you'),
+              subtitle: Text(
+                !canPublish
+                    ? "Locked until admin approves your organizer account — you can still save as a draft"
+                    : 'Off = save as draft, visible only to you',
+              ),
               value: _publishImmediately,
-              onChanged: (v) => setState(() => _publishImmediately = v),
+              onChanged: canPublish ? (v) => setState(() => _publishImmediately = v) : null,
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

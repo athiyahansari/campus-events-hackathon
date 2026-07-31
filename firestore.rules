@@ -15,6 +15,16 @@ service cloud.firestore {
       return isSignedIn() && userData().role == 'organizer';
     }
 
+    function isAdmin() {
+      return isSignedIn() && userData().role == 'admin';
+    }
+
+    // An organizer can only publish once the global admin has reviewed and approved their
+    // account — until then they can create events and save drafts, but not publish.
+    function isApprovedOrganizer() {
+      return isOrganizer() && userData().organizerApproved == true;
+    }
+
     // An organizer's own club must match the event's category — events are always
     // categorized under the organizer's own club/school (enforced in the client's
     // create-event form too, but this is the real boundary).
@@ -28,18 +38,31 @@ service cloud.firestore {
 
     // ---------------- users ----------------
     match /users/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
+      // The global admin reviews every account, so they can read the whole roster; everyone
+      // else can only read their own profile.
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
 
+      // Self-signup can only ever create a 'student' or 'organizer' account — 'admin' is
+      // provisioned out-of-band (directly in the Firestore console), never through the app.
+      // A new organizer always starts unapproved; only the admin update branch below can
+      // flip `organizerApproved` to true.
       allow create: if isSignedIn()
         && request.auth.uid == uid
         && request.resource.data.role in ['student', 'organizer']
+        && request.resource.data.organizerApproved == false
         && (request.resource.data.role == 'student' || request.resource.data.club is string);
 
       // Name/interests are editable; role/club are immutable after signup to block privilege escalation.
       allow update: if isSignedIn()
         && request.auth.uid == uid
         && unchanged('role')
-        && unchanged('club');
+        && unchanged('club')
+        && unchanged('organizerApproved');
+
+      // The admin reviews an organizer's account and approves/revokes it — the only field
+      // they're allowed to touch on someone else's profile.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['organizerApproved']);
 
       allow delete: if false;
     }
@@ -49,12 +72,15 @@ service cloud.firestore {
       allow read: if resource.data.status in ['published', 'archived']
         || ownsCategory(resource.data.category);
 
+      // An unapproved organizer can still create events, just not published ones — they land
+      // as drafts until the admin approves the account (see isApprovedOrganizer()).
       allow create: if isOrganizer()
         && request.resource.data.organizerId == request.auth.uid
         && request.resource.data.category == userData().club
         && request.resource.data.registeredCount == 0
         && request.resource.data.checkedInCount == 0
-        && request.resource.data.status in ['draft', 'published'];
+        && request.resource.data.status in ['draft', 'published']
+        && (request.resource.data.status == 'draft' || isApprovedOrganizer());
 
       // (a) Organizer manages their own club's event (can't reassign owner/category to dodge the
       //     rule) — this is also the only path that can touch activeCheckinToken/tokenGeneratedAt,
@@ -68,6 +94,9 @@ service cloud.firestore {
           ownsCategory(resource.data.category)
           && unchanged('organizerId')
           && unchanged('category')
+          // Draft -> published (or staying published) requires an approved organizer account;
+          // every other transition (e.g. published -> concluded, editing a draft) is unaffected.
+          && (request.resource.data.status != 'published' || unchanged('status') || isApprovedOrganizer())
         ) || (
           isSignedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount'])

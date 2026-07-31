@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/event_model.dart';
-import 'event_badge_chip.dart';
 
 class EventCard extends StatelessWidget {
   final EventModel event;
@@ -13,59 +12,153 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('EEE, MMM d · h:mm a');
+    final dateFormat = DateFormat('yyyy-MM-dd · HH:mm');
     final spotsLeft = event.capacity - event.registeredCount;
+    final isLive = event.status == EventStatus.published &&
+        event.startTime.isBefore(DateTime.now().add(const Duration(hours: 1))) &&
+        event.endTime.isAfter(DateTime.now());
+    
+    final progress = event.capacity > 0 ? (event.registeredCount / event.capacity).clamp(0.0, 1.0) : 0.0;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty)
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: CachedNetworkImage(
-                  imageUrl: event.bannerImageUrl!,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, _, _) => Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: const Icon(Icons.image_not_supported),
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Image Area
+              Stack(
                 children: [
-                  Text(event.title, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(dateFormat.format(event.startTime)),
-                  Text(event.venue),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Chip(label: Text(event.category), visualDensity: VisualDensity.compact),
-                      EventBadgeChip(badge: event.badgeAt(DateTime.now())),
-                      Text(
-                        event.isFull ? 'Full' : '$spotsLeft spots left',
-                        style: TextStyle(
-                          color: event.isFull ? Theme.of(context).colorScheme.error : null,
-                          fontWeight: FontWeight.w500,
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: CachedNetworkImage(
+                        imageUrl: (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty) 
+                            ? event.bannerImageUrl! 
+                            : 'https://via.placeholder.com/400x225',
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) => Container(
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image_not_supported, color: Colors.grey),
                         ),
                       ),
-                    ],
+                    ),
                   ),
+                  if (isLive)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.green)),
+                            const SizedBox(width: 6),
+                            const Text('Live Now', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (event.isFull && !isLive)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('Fully Booked', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
                 ],
               ),
-            ),
-          ],
+              
+              // Bottom Details Area
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(event.category, style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      event.title,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_month, size: 14, color: Colors.black45),
+                        const SizedBox(width: 6),
+                        Text(dateFormat.format(event.startTime), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 14, color: Colors.pinkAccent),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text(event.venue, style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Capacity Progress
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation<Color>(event.isFull ? Colors.red : Colors.blueAccent),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      event.isFull ? 'Fully Booked' : '$spotsLeft spots left',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: event.isFull ? Colors.red : Colors.black54,
+                        fontWeight: event.isFull ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

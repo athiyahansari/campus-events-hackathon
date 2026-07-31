@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/event_model.dart';
 import '../models/notification_model.dart';
 import '../models/registration_model.dart';
+import '../models/user_model.dart';
 import '../models/waitlist_model.dart';
 
 enum RegistrationOutcome { registered, waitlisted }
@@ -56,6 +57,21 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get _registrations => _db.collection('registrations');
   CollectionReference<Map<String, dynamic>> get _waitlist => _db.collection('waitlist');
   CollectionReference<Map<String, dynamic>> get _notifications => _db.collection('notifications');
+  CollectionReference<Map<String, dynamic>> get _users => _db.collection('users');
+
+  // ---------------- Admin ----------------
+
+  Stream<List<UserModel>> usersByRole(UserRole role) {
+    return _users.where('role', isEqualTo: userRoleToString(role)).snapshots().map((snap) {
+      final users = snap.docs.map((d) => UserModel.fromMap(d.id, d.data())).toList();
+      users.sort((a, b) => a.name.compareTo(b.name));
+      return users;
+    });
+  }
+
+  Future<void> setOrganizerApproved(String uid, bool approved) {
+    return _users.doc(uid).update({'organizerApproved': approved});
+  }
 
   // ---------------- Events ----------------
 

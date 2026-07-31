@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
 import '../../models/waitlist_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import 'archive_event_screen.dart';
 import 'checkin_display_screen.dart';
@@ -43,6 +44,7 @@ class ManageEventScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('EEE, MMM d, y · h:mm a');
     final firestore = context.read<FirestoreService>();
+    final organizerApproved = context.watch<AuthProvider>().userProfile?.organizerApproved ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -79,12 +81,20 @@ class ManageEventScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              if (current.status == EventStatus.draft)
+              if (current.status == EventStatus.draft) ...[
                 FilledButton.icon(
                   icon: const Icon(Icons.publish),
                   label: const Text('Publish Event'),
-                  onPressed: () => _updateStatus(context, EventStatus.published),
+                  onPressed: organizerApproved ? () => _updateStatus(context, EventStatus.published) : null,
                 ),
+                if (!organizerApproved) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Publishing is locked until admin approves your organizer account.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+              ],
               if (current.status == EventStatus.published || current.status == EventStatus.concluded) ...[
                 if (DateTime.now().isAfter(current.endTime)) ...[
                   Container(

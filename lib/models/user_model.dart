@@ -1,13 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { student, organizer }
+enum UserRole { student, organizer, admin }
 
 UserRole userRoleFromString(String value) {
-  return value == 'organizer' ? UserRole.organizer : UserRole.student;
+  switch (value) {
+    case 'organizer':
+      return UserRole.organizer;
+    case 'admin':
+      return UserRole.admin;
+    default:
+      return UserRole.student;
+  }
 }
 
 String userRoleToString(UserRole role) {
-  return role == UserRole.organizer ? 'organizer' : 'student';
+  switch (role) {
+    case UserRole.organizer:
+      return 'organizer';
+    case UserRole.admin:
+      return 'admin';
+    case UserRole.student:
+      return 'student';
+  }
 }
 
 class UserModel {
@@ -22,6 +36,7 @@ class UserModel {
   final int? age;
   final String? batch;
   final String? staffId;
+  final bool organizerApproved;
 
   UserModel({
     required this.uid,
@@ -35,6 +50,7 @@ class UserModel {
     this.age,
     this.batch,
     this.staffId,
+    this.organizerApproved = false,
   });
 
   factory UserModel.fromMap(String uid, Map<String, dynamic> map) {
@@ -50,6 +66,7 @@ class UserModel {
       age: map['age'] as int?,
       batch: map['batch'] as String?,
       staffId: map['staffId'] as String?,
+      organizerApproved: map['organizerApproved'] as bool? ?? false,
     );
   }
 
@@ -65,8 +82,10 @@ class UserModel {
       'age': age,
       'batch': batch,
       'staffId': staffId,
+      'organizerApproved': organizerApproved,
     };
   }
 
   bool get isOrganizer => role == UserRole.organizer;
+  bool get isAdmin => role == UserRole.admin;
 }

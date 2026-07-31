@@ -161,7 +161,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     selected: {_role},
                     onSelectionChanged: (selection) => setState(() => _role = selection.first),
                     style: SegmentedButton.styleFrom(
-                      selectedBackgroundColor: const Color(0xFF1E2F4D).withOpacity(0.1),
+                      selectedBackgroundColor: const Color(0xFF1E2F4D).withValues(alpha: 0.1),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -190,7 +190,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     const Text('School / Club', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
-                      value: _club,
+                      initialValue: _club,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),

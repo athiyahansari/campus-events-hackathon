@@ -23,6 +23,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get isOrganizer => userProfile?.isOrganizer ?? false;
+  bool get isAdmin => userProfile?.isAdmin ?? false;
 
   Future<void> _onAuthChanged(User? user) async {
     firebaseUser = user;
@@ -84,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
       age: userProfile!.age,
       batch: userProfile!.batch,
       staffId: userProfile!.staffId,
+      organizerApproved: userProfile!.organizerApproved,
     );
     notifyListeners();
   }
