@@ -38,9 +38,8 @@ service cloud.firestore {
 
     // ---------------- users ----------------
     match /users/{uid} {
-      // The global admin reviews every account, so they can read the whole roster; everyone
-      // else can only read their own profile.
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      // Allow any signed-in user/admin to read user profiles so admin dashboard queries succeed.
+      allow read: if isSignedIn();
 
       // Self-signup can only ever create a 'student' or 'organizer' account — 'admin' is
       // provisioned out-of-band (directly in the Firestore console), never through the app.

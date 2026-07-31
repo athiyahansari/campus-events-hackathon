@@ -19,9 +19,10 @@ class AdminDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Admin'),
         actions: [
-          TextButton(
+          TextButton.icon(
             onPressed: () => context.read<AuthProvider>().signOut(),
-            child: const Text('Sign out', style: TextStyle(color: Colors.white70)),
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            label: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -39,6 +40,12 @@ class AdminDashboardScreen extends StatelessWidget {
           StreamBuilder<List<UserModel>>(
             stream: firestore.usersByRole(UserRole.organizer),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text('Error loading organizers: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                );
+              }
               if (!snapshot.hasData) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
@@ -67,6 +74,12 @@ class AdminDashboardScreen extends StatelessWidget {
           StreamBuilder<List<UserModel>>(
             stream: firestore.usersByRole(UserRole.student),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text('Error loading students: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                );
+              }
               if (!snapshot.hasData) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
