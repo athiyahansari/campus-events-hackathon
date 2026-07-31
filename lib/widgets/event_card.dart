@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/event_model.dart';
+import 'event_badge_chip.dart';
 
 class EventCard extends StatelessWidget {
   final EventModel event;
@@ -45,10 +46,13 @@ class EventCard extends StatelessWidget {
                   Text(dateFormat.format(event.startTime)),
                   Text(event.venue),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Chip(label: Text(event.category), visualDensity: VisualDensity.compact),
-                      const SizedBox(width: 8),
+                      EventBadgeChip(badge: event.badgeAt(DateTime.now())),
                       Text(
                         event.isFull ? 'Full' : '$spotsLeft spots left',
                         style: TextStyle(

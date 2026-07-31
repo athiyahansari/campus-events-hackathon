@@ -43,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required UserRole role,
     String? club,
+    List<String> interests = const [],
   }) async {
     errorMessage = null;
     try {
@@ -52,6 +53,7 @@ class AuthProvider extends ChangeNotifier {
         password: password,
         role: role,
         club: club,
+        interests: interests,
       );
       return true;
     } on FirebaseAuthException catch (e) {
@@ -59,6 +61,21 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<void> updateInterests(List<String> interests) async {
+    if (firebaseUser == null || userProfile == null) return;
+    await _authService.updateInterests(firebaseUser!.uid, interests);
+    userProfile = UserModel(
+      uid: userProfile!.uid,
+      name: userProfile!.name,
+      email: userProfile!.email,
+      role: userProfile!.role,
+      club: userProfile!.club,
+      interests: interests,
+      createdAt: userProfile!.createdAt,
+    );
+    notifyListeners();
   }
 
   Future<bool> signIn({required String email, required String password}) async {

@@ -7,6 +7,7 @@ import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/event_badge_chip.dart';
 import '../auth/login_screen.dart';
 import 'ticket_screen.dart';
 
@@ -62,7 +63,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               children: [
                 Text(event.title, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                Chip(label: Text(event.category)),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    Chip(label: Text(event.category)),
+                    EventBadgeChip(badge: event.badgeAt(DateTime.now())),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 _InfoRow(icon: Icons.calendar_today, text: dateFormat.format(event.startTime)),
                 _InfoRow(icon: Icons.location_on, text: event.venue),

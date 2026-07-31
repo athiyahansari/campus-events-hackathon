@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum EventStatus { draft, published, concluded, archived }
 
+enum EventBadge { liveNow, upcoming, fullyBooked }
+
 EventStatus eventStatusFromString(String value) {
   switch (value) {
     case 'published':
@@ -69,6 +71,14 @@ class EventModel {
   });
 
   bool get isFull => registeredCount >= capacity;
+
+  /// Fully booked takes priority over live/upcoming since it's the more
+  /// actionable thing for a browsing student to know.
+  EventBadge badgeAt(DateTime now) {
+    if (isFull) return EventBadge.fullyBooked;
+    if (now.isAfter(startTime) && now.isBefore(endTime)) return EventBadge.liveNow;
+    return EventBadge.upcoming;
+  }
 
   factory EventModel.fromMap(String id, Map<String, dynamic> map) {
     return EventModel(

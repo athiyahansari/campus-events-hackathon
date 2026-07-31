@@ -4,16 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/event_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
-
-const List<String> kEventCategories = [
-  'Academic',
-  'Social',
-  'Sports',
-  'Arts & Culture',
-  'Career',
-  'Workshop',
-  'Other',
-];
+import '../../utils/clubs.dart';
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({super.key});
@@ -30,7 +21,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _capacityController = TextEditingController();
   final _bannerUrlController = TextEditingController();
 
-  String _category = kEventCategories.first;
+  String _category = kCampusCategories.first;
   DateTime? _startTime;
   DateTime? _endTime;
   bool _publishImmediately = true;
@@ -144,7 +135,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             DropdownButtonFormField<String>(
               initialValue: _category,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: kEventCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              items: kCampusCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
               onChanged: (v) => setState(() => _category = v!),
             ),
             const SizedBox(height: 12),

@@ -16,6 +16,7 @@ class UserModel {
   final String email;
   final UserRole role;
   final String? club;
+  final List<String> interests;
   final DateTime? createdAt;
 
   UserModel({
@@ -25,6 +26,7 @@ class UserModel {
     required this.role,
     required this.club,
     required this.createdAt,
+    this.interests = const [],
   });
 
   factory UserModel.fromMap(String uid, Map<String, dynamic> map) {
@@ -34,6 +36,7 @@ class UserModel {
       email: map['email'] as String? ?? '',
       role: userRoleFromString(map['role'] as String? ?? 'student'),
       club: map['club'] as String?,
+      interests: List<String>.from(map['interests'] as List? ?? []),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
     );
   }
@@ -44,6 +47,7 @@ class UserModel {
       'email': email,
       'role': userRoleToString(role),
       'club': club,
+      'interests': interests,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }

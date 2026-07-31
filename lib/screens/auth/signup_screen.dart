@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/clubs.dart';
+import '../../widgets/interest_picker.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -20,6 +21,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   UserRole _role = UserRole.student;
   String? _club;
+  Set<String> _interests = {};
   bool _submitting = false;
 
   @override
@@ -47,6 +49,7 @@ class _SignupScreenState extends State<SignupScreen> {
       password: _passwordController.text,
       role: _role,
       club: _role == UserRole.organizer ? _club : null,
+      interests: _role == UserRole.student ? _interests.toList() : const [],
     );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -108,6 +111,23 @@ class _SignupScreenState extends State<SignupScreen> {
                 decoration: const InputDecoration(labelText: 'Club / School'),
                 items: kClubs.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                 onChanged: (v) => setState(() => _club = v),
+              ),
+            ],
+            if (_role == UserRole.student) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Interests (optional)',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the clubs/schools you want to see first in your feed. You can change this anytime.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              InterestPicker(
+                selected: _interests,
+                onChanged: (next) => setState(() => _interests = next),
               ),
             ],
             const SizedBox(height: 24),

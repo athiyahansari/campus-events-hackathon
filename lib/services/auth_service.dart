@@ -23,6 +23,7 @@ class AuthService {
     required String password,
     required UserRole role,
     String? club,
+    List<String> interests = const [],
   }) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -35,10 +36,15 @@ class AuthService {
       email: email,
       role: role,
       club: club,
+      interests: interests,
       createdAt: DateTime.now(),
     );
     await _firestore.collection('users').doc(uid).set(profile.toMap());
     return credential;
+  }
+
+  Future<void> updateInterests(String uid, List<String> interests) {
+    return _firestore.collection('users').doc(uid).update({'interests': interests});
   }
 
   Future<UserCredential> signIn({
