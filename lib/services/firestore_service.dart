@@ -73,6 +73,75 @@ class FirestoreService {
     return _users.doc(uid).update({'organizerApproved': approved});
   }
 
+  Future<void> seedDemoData() async {
+    final now = DateTime.now();
+    
+    // 1. Live Event with QR Code Active
+    await _events.add({
+      'title': 'APIIT Annual Tech Summit 2026',
+      'description': 'Join leading industry experts, software engineers, and tech founders for keynotes and live demos on AI and Mobile Development.',
+      'category': 'Computing School',
+      'venue': 'Main Auditorium, Block A',
+      'startTime': Timestamp.fromDate(now.subtract(const Duration(minutes: 30))),
+      'endTime': Timestamp.fromDate(now.add(const Duration(hours: 3))),
+      'capacity': 50,
+      'registeredCount': 18,
+      'checkedInCount': 12,
+      'bannerImageUrl': 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80',
+      'organizerId': 'demo-organizer',
+      'status': 'published',
+      'archivePhotos': [],
+      'archiveSummary': null,
+      'createdAt': FieldValue.serverTimestamp(),
+      'activeCheckinToken': 'demo-checkin-token-999',
+      'tokenGeneratedAt': Timestamp.fromDate(now),
+      'certificateEnabled': true,
+    });
+
+    // 2. Upcoming Event
+    await _events.add({
+      'title': 'Business & Startup Pitch Night',
+      'description': 'Watch student entrepreneurs pitch their innovative startup ideas to real venture capitalists and angel investors.',
+      'category': 'Business School',
+      'venue': 'Conference Hall 2',
+      'startTime': Timestamp.fromDate(now.add(const Duration(days: 1))),
+      'endTime': Timestamp.fromDate(now.add(const Duration(days: 1, hours: 3))),
+      'capacity': 40,
+      'registeredCount': 25,
+      'checkedInCount': 0,
+      'bannerImageUrl': 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&q=80',
+      'organizerId': 'demo-organizer',
+      'status': 'published',
+      'archivePhotos': [],
+      'archiveSummary': null,
+      'createdAt': FieldValue.serverTimestamp(),
+      'certificateEnabled': true,
+    });
+
+    // 3. Archived Event
+    await _events.add({
+      'title': 'Inter-University Game Jam 2026',
+      'description': '48-hour continuous game creation challenge open to all skill levels.',
+      'category': 'Computing School',
+      'venue': 'APIIT Tech Hub',
+      'startTime': Timestamp.fromDate(now.subtract(const Duration(days: 5))),
+      'endTime': Timestamp.fromDate(now.subtract(const Duration(days: 3))),
+      'capacity': 100,
+      'registeredCount': 85,
+      'checkedInCount': 80,
+      'bannerImageUrl': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
+      'organizerId': 'demo-organizer',
+      'status': 'archived',
+      'archivePhotos': [
+        'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
+        'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&q=80',
+      ],
+      'archiveSummary': 'Huge success! 15 game prototypes were completed and presented. First place went to Team ByteCraft!',
+      'createdAt': FieldValue.serverTimestamp(),
+      'certificateEnabled': true,
+    });
+  }
+
   // ---------------- Events ----------------
 
   Stream<List<EventModel>> publicEventFeed() {

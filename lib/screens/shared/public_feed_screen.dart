@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/clubs.dart';
 import '../../widgets/event_card.dart';
@@ -75,15 +76,39 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
 
           return CustomScrollView(
             slivers: [
-              const SliverAppBar(
-                backgroundColor: Color(0xFF1E2F4D),
-                title: Row(
+              SliverAppBar(
+                backgroundColor: const Color(0xFF1E2F4D),
+                title: const Row(
                   children: [
                     Icon(Icons.event_note, color: Colors.blueAccent),
                     SizedBox(width: 8),
                     Text('UniEvents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ],
                 ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.dataset, color: Colors.orangeAccent),
+                    tooltip: 'Seed Demo Events',
+                    onPressed: () async {
+                      await context.read<FirestoreService>().seedDemoData();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Demo Events (Live, Upcoming & Archived) created!')),
+                        );
+                      }
+                    },
+                  ),
+                  Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, _) => IconButton(
+                      icon: Icon(
+                        themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Toggle Theme',
+                      onPressed: () => themeProvider.toggleTheme(),
+                    ),
+                  ),
+                ],
                 floating: true,
                 pinned: false,
               ),

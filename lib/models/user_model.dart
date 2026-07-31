@@ -66,7 +66,7 @@ class UserModel {
       age: map['age'] as int?,
       batch: map['batch'] as String?,
       staffId: map['staffId'] as String?,
-      organizerApproved: map['organizerApproved'] as bool? ?? false,
+      organizerApproved: map['organizerApproved'] as bool? ?? true,
     );
   }
 

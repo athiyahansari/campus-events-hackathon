@@ -72,7 +72,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final auth = context.watch<AuthProvider>();
     final firestore = context.read<FirestoreService>();
     final dateFormat = DateFormat('MMM d, yyyy · h:mm a');
-    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl, eventId: event.id);
     
     final isLive = event.status == EventStatus.published &&
         event.startTime.isBefore(DateTime.now().add(const Duration(hours: 1))) &&

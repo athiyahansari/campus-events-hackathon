@@ -151,7 +151,7 @@ class _ArchivedEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl, eventId: event.id);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

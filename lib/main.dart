@@ -8,6 +8,8 @@ import 'screens/shared/splash_screen.dart';
 import 'services/firestore_service.dart';
 import 'services/push_notification_service.dart';
 
+import 'providers/theme_provider.dart';
+
 final rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
@@ -25,21 +27,38 @@ class CampusEventsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         Provider(create: (_) => FirestoreService()),
         Provider(
           create: (context) => PushNotificationService(context.read<FirestoreService>(), rootScaffoldMessengerKey),
         ),
       ],
-      child: MaterialApp(
-        title: 'Campus Events',
-        debugShowCheckedModeBanner: false,
-        scaffoldMessengerKey: rootScaffoldMessengerKey,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
-        home: const SplashScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'Campus Events',
+            debugShowCheckedModeBanner: false,
+            scaffoldMessengerKey: rootScaffoldMessengerKey,
+            themeMode: themeProvider.themeMode,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF3366FF),
+                brightness: Brightness.light,
+              ),
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF3366FF),
+                brightness: Brightness.dark,
+              ),
+              scaffoldBackgroundColor: const Color(0xFF121212),
+              useMaterial3: true,
+            ),
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

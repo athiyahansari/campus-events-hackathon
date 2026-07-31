@@ -21,7 +21,7 @@ class EventCard extends StatelessWidget {
         event.endTime.isAfter(DateTime.now());
     
     final progress = event.capacity > 0 ? (event.registeredCount / event.capacity).clamp(0.0, 1.0) : 0.0;
-    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl);
+    final bannerUrl = getEventBannerUrl(event.category, event.bannerImageUrl, eventId: event.id);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

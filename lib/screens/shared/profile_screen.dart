@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/registration_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/firestore_service.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -75,9 +76,15 @@ class _ProfileHeader extends StatelessWidget {
             children: [
               const SizedBox(width: 24),
               const Text('Profile', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              IconButton(
-                icon: const Icon(Icons.settings, color: Colors.white70),
-                onPressed: () {},
+              Consumer<ThemeProvider>(
+                builder: (context, themeProvider, _) => IconButton(
+                  icon: Icon(
+                    themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                    color: Colors.white70,
+                  ),
+                  tooltip: 'Toggle Theme',
+                  onPressed: () => themeProvider.toggleTheme(),
+                ),
               ),
             ],
           ),
