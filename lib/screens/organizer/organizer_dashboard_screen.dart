@@ -195,6 +195,12 @@ class _EventCard extends StatelessWidget {
                     width: 72,
                     height: 72,
                     fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => Container(
+                      width: 72,
+                      height: 72,
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

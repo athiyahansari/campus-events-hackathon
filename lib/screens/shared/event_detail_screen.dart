@@ -94,6 +94,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ? event.bannerImageUrl! 
                         : 'https://via.placeholder.com/400x300',
                     fit: BoxFit.cover,
+                    errorWidget: (context, url, error) => Container(
+                      color: const Color(0xFF1E2F4D),
+                      child: const Center(
+                        child: Icon(Icons.event, size: 64, color: Colors.white54),
+                      ),
+                    ),
                   ),
                   Container(
                     decoration: BoxDecoration(

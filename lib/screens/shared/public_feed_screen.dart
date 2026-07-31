@@ -97,7 +97,7 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
                           icon: Icons.calendar_month,
                           iconColor: Colors.blueAccent,
                           count: '${allEvents.length}',
-                          label: 'Upcoming\\nEvents',
+                          label: 'Upcoming\nEvents',
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -106,7 +106,7 @@ class _PublicFeedScreenState extends State<PublicFeedScreen> {
                           icon: Icons.folder,
                           iconColor: Colors.orange,
                           count: '3', // Mock for UI demo
-                          label: 'Past\\nEvents',
+                          label: 'Past\nEvents',
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -261,7 +261,7 @@ class _StatBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -273,17 +273,25 @@ class _StatBox extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: iconColor, size: 20),
+            child: Icon(icon, color: iconColor, size: 18),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(count, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E2F4D))),
-              Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-            ],
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(count, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E2F4D))),
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 9, color: Colors.black54, height: 1.1),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
