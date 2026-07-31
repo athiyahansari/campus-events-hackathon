@@ -1,0 +1,110 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isOrganizer() {
+      return isSignedIn() && userData().role == 'organizer';
+    }
+
+    function ownsClub(club) {
+      return isOrganizer() && userData().club == club;
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    // ---------------- users ----------------
+    match /users/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role in ['student', 'organizer']
+        && (request.resource.data.role == 'student' || request.resource.data.club is string);
+
+      // Name is editable; role/club are immutable after signup to block privilege escalation.
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && unchanged('role')
+        && unchanged('club');
+
+      allow delete: if false;
+    }
+
+    // ---------------- events ----------------
+    match /events/{eventId} {
+      allow read: if resource.data.status in ['published', 'archived']
+        || ownsClub(resource.data.club);
+
+      allow create: if isOrganizer()
+        && request.resource.data.organizerId == request.auth.uid
+        && request.resource.data.club == userData().club
+        && request.resource.data.registeredCount == 0
+        && request.resource.data.checkedInCount == 0
+        && request.resource.data.status in ['draft', 'published'];
+
+      // (a) Organizer manages their own club's event (can't reassign owner/club to dodge the rule).
+      // (b) Student registration: the ONLY write a student can make to this collection is an
+      //     atomic +1 to registeredCount, and only while the event is published and under capacity.
+      // (c) Organizer check-in: the ONLY write a scanning organizer can make is an atomic +1 to
+      //     checkedInCount for their own club's event.
+      allow update: if (
+          ownsClub(resource.data.club)
+          && unchanged('organizerId')
+          && unchanged('club')
+        ) || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount'])
+          && request.resource.data.registeredCount == resource.data.registeredCount + 1
+          && resource.data.status == 'published'
+          && resource.data.registeredCount < resource.data.capacity
+        ) || (
+          ownsClub(resource.data.club)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedInCount'])
+          && request.resource.data.checkedInCount == resource.data.checkedInCount + 1
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------------- registrations ----------------
+    match /registrations/{registrationId} {
+      function event() {
+        return get(/databases/$(database)/documents/events/$(resource.data.eventId)).data;
+      }
+      function newEvent() {
+        return get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data;
+      }
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || ownsClub(event().club)
+      );
+
+      // Deterministic id ('<eventId>_<uid>') blocks a user from registering twice under
+      // different doc ids, enforced here in addition to the client-side transaction check.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.checkedIn == false
+        && registrationId == request.resource.data.eventId + '_' + request.auth.uid
+        && newEvent().status == 'published'
+        && newEvent().registeredCount < newEvent().capacity;
+
+      allow update: if ownsClub(event().club)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt'])
+        && resource.data.checkedIn == false
+        && request.resource.data.checkedIn == true;
+
+      allow delete: if false;
+    }
+  }
+}

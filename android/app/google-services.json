@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "71711731217",
+    "project_id": "campusconnect-hackathon",
+    "storage_bucket": "campusconnect-hackathon.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:71711731217:android:d0cd6672ba9050474f4bb0",
+        "android_client_info": {
+          "package_name": "com.example.campus_events"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmb0o1QP4u15fxAWqUFQP36mN9OOPKMW8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

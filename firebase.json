@@ -1,0 +1,29 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "campusconnect-hackathon",
+          "appId": "1:71711731217:android:d0cd6672ba9050474f4bb0",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "campusconnect-hackathon",
+          "configurations": {
+            "android": "1:71711731217:android:d0cd6672ba9050474f4bb0",
+            "web": "1:71711731217:web:5bcd4994c57bb8bb4f4bb0"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

@@ -1,0 +1,52 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum UserRole { student, organizer }
+
+UserRole userRoleFromString(String value) {
+  return value == 'organizer' ? UserRole.organizer : UserRole.student;
+}
+
+String userRoleToString(UserRole role) {
+  return role == UserRole.organizer ? 'organizer' : 'student';
+}
+
+class UserModel {
+  final String uid;
+  final String name;
+  final String email;
+  final UserRole role;
+  final String? club;
+  final DateTime? createdAt;
+
+  UserModel({
+    required this.uid,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.club,
+    required this.createdAt,
+  });
+
+  factory UserModel.fromMap(String uid, Map<String, dynamic> map) {
+    return UserModel(
+      uid: uid,
+      name: map['name'] as String? ?? '',
+      email: map['email'] as String? ?? '',
+      role: userRoleFromString(map['role'] as String? ?? 'student'),
+      club: map['club'] as String?,
+      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'role': userRoleToString(role),
+      'club': club,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+    };
+  }
+
+  bool get isOrganizer => role == UserRole.organizer;
+}
