@@ -22,7 +22,7 @@ service cloud.firestore {
     // An organizer can only publish once the global admin has reviewed and approved their
     // account — until then they can create events and save drafts, but not publish.
     function isApprovedOrganizer() {
-      return isOrganizer();
+      return isOrganizer() && userData().organizerApproved == true;
     }
 
     // An organizer's own club must match the event's category — events are always

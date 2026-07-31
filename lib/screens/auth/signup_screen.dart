@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/clubs.dart';
+import '../../widgets/app_widgets.dart';
 import '../../widgets/interest_picker.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -41,18 +43,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_role == UserRole.organizer && _staffIdController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your Staff ID to request organizer access.')),
-      );
-      return;
-    }
-    if (_role == UserRole.student && _club == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select your school.')),
-      );
-      return;
-    }
+    FocusScope.of(context).unfocus();
 
     setState(() => _submitting = true);
     final auth = context.read<AuthProvider>();
@@ -61,7 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
       role: _role,
-      club: _role == UserRole.student ? _club : null,
+      club: _club,
       interests: _role == UserRole.student ? _interests.toList() : const [],
       age: _role == UserRole.student ? int.tryParse(_ageController.text.trim()) : null,
       batch: _role == UserRole.student ? _batchController.text.trim() : null,
@@ -72,197 +63,243 @@ class _SignupScreenState extends State<SignupScreen> {
 
     if (success) {
       Navigator.of(context).pop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(auth.errorMessage ?? 'Sign up failed.')),
+      showAppSnack(
+        context,
+        _role == UserRole.organizer
+            ? 'Account created. An admin must approve you before you can publish events.'
+            : 'Account created — welcome!',
       );
+    } else {
+      showAppSnack(context, auth.errorMessage ?? 'Sign up failed.', isError: true);
     }
-  }
-
-  Widget _buildTextField(String label, TextEditingController controller, {bool obscure = false, bool isPassword = false, TextInputType? keyboardType, String? Function(String?)? validator}) {
-    final isObscured = isPassword ? _obscurePassword : obscure;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-        const SizedBox(height: 4),
-        TextFormField(
-          controller: controller,
-          obscureText: isObscured,
-          keyboardType: keyboardType,
-          validator: validator,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.black12),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.black12),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            suffixIcon: isPassword
-                ? IconButton(
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  )
-                : null,
-          ),
-        ),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF6E747F), // Dark grey-blue background overlay
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Top section with Icon and Back Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF7CC),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.person_add, color: Colors.purple[300]),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Sign Up',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E2F4D),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SegmentedButton<UserRole>(
-                    segments: const [
-                      ButtonSegment(value: UserRole.student, label: Text('Student'), icon: Icon(Icons.school)),
-                      ButtonSegment(value: UserRole.organizer, label: Text('Organizer'), icon: Icon(Icons.badge)),
-                    ],
-                    selected: {_role},
-                    onSelectionChanged: (selection) => setState(() => _role = selection.first),
-                    style: SegmentedButton.styleFrom(
-                      selectedBackgroundColor: const Color(0xFF1E2F4D).withValues(alpha: 0.1),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  _buildTextField('Full Name', _nameController, validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your name' : null),
-                  const SizedBox(height: 16),
-                  _buildTextField('Email', _emailController, keyboardType: TextInputType.emailAddress, validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Enter your email';
-                    if (!v.contains('@')) return 'Enter a valid email';
-                    return null;
-                  }),
-                  const SizedBox(height: 16),
-                  _buildTextField('Password', _passwordController, isPassword: true, validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null),
-                  const SizedBox(height: 16),
-                  
-                  if (_role == UserRole.student) ...[
-                    Row(
-                      children: [
-                        Expanded(child: _buildTextField('Age', _ageController, keyboardType: TextInputType.number)),
-                        const SizedBox(width: 16),
-                        Expanded(child: _buildTextField('Batch (Year)', _batchController, keyboardType: TextInputType.number)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    const Text('School / Club', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    DropdownButtonFormField<String>(
-                      initialValue: _club,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.black12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.black12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      items: kClubs.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                      onChanged: (v) => setState(() => _club = v),
-                      validator: (v) => v == null ? 'Please select one' : null,
-                    ),
-                  ],
+    final p = context.palette;
+    final isStudent = _role == UserRole.student;
 
-                  if (_role == UserRole.organizer) ...[
-                    _buildTextField(
-                      'Staff ID / Access Code', 
-                      _staffIdController, 
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required for organizer access' : null
+    return Scaffold(
+      backgroundColor: p.background,
+      appBar: AppBar(title: const Text('Create account')),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SegmentedButton<UserRole>(
+                      segments: const [
+                        ButtonSegment(
+                            value: UserRole.student, label: Text('Student'), icon: Icon(Icons.school)),
+                        ButtonSegment(
+                            value: UserRole.organizer, label: Text('Organizer'), icon: Icon(Icons.badge)),
+                      ],
+                      selected: {_role},
+                      onSelectionChanged: (selection) => setState(() {
+                        _role = selection.first;
+                        // Club means different things per role, so reset it when
+                        // switching to avoid carrying over a stale selection.
+                        _club = null;
+                      }),
                     ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    if (_role == UserRole.organizer)
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          color: p.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: p.warning.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 18, color: p.warning),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'Organizer accounts need admin approval before you can publish events. '
+                                'You can create drafts straight away.',
+                                style: TextStyle(fontSize: 12, color: p.textPrimary, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _FieldLabel('Full name'),
+                          TextFormField(
+                            controller: _nameController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(hintText: 'Your name'),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          _FieldLabel('Email'),
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(hintText: 'you@university.edu'),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) return 'Enter your email';
+                              if (!v.contains('@')) return 'Enter a valid email';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          _FieldLabel('Password'),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              hintText: 'At least 6 characters',
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  color: p.textSecondary,
+                                ),
+                                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          if (isStudent) ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      _FieldLabel('Age'),
+                                      TextFormField(
+                                        controller: _ageController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(hintText: '20'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.lg),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      _FieldLabel('Batch / year'),
+                                      TextFormField(
+                                        controller: _batchController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(hintText: '2026'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
+
+                          _FieldLabel(isStudent ? 'School' : 'Club / school you organise for'),
+                          DropdownButtonFormField<String>(
+                            initialValue: _club,
+                            isExpanded: true,
+                            decoration: const InputDecoration(hintText: 'Select one'),
+                            items: kClubs
+                                .map((c) => DropdownMenuItem(
+                                      value: c,
+                                      child: Text(c, overflow: TextOverflow.ellipsis),
+                                    ))
+                                .toList(),
+                            onChanged: (v) => setState(() => _club = v),
+                            validator: (v) => v == null ? 'Please select one' : null,
+                          ),
+
+                          if (_role == UserRole.organizer) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            _FieldLabel('Staff ID / access code'),
+                            TextFormField(
+                              controller: _staffIdController,
+                              decoration: const InputDecoration(hintText: 'Shown to the admin reviewing you'),
+                              validator: (v) =>
+                                  (v == null || v.trim().isEmpty) ? 'Required for organizer access' : null,
+                            ),
+                          ],
+
+                          if (isStudent) ...[
+                            const SizedBox(height: AppSpacing.xl),
+                            _FieldLabel('Interests (optional)'),
+                            Text(
+                              'We use these to personalise your feed and to pick who gets a released seat.',
+                              style: TextStyle(fontSize: 12, color: p.textSecondary),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            InterestPicker(
+                              selected: _interests,
+                              onChanged: (next) => setState(() => _interests = next),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.xl),
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _submitting ? null : _submit,
+                        child: _submitting
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Create account'),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
                   ],
-                  
-                  if (_role == UserRole.student) ...[
-                    const SizedBox(height: 24),
-                    const Text('Interests (optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    InterestPicker(
-                      selected: _interests,
-                      onChanged: (next) => setState(() => _interests = next),
-                    ),
-                  ],
-                  
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    onPressed: _submitting ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E2F4D),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Create Account', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.bold,
+          color: context.palette.textPrimary,
         ),
       ),
     );

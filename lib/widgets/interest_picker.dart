@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import '../utils/clubs.dart';
+import 'app_widgets.dart';
 
 class InterestPicker extends StatelessWidget {
   final Set<String> selected;
@@ -11,19 +13,19 @@ class InterestPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
       children: kCampusCategories.map((category) {
         final isSelected = selected.contains(category);
-        return FilterChip(
-          label: Text(category),
-          selected: isSelected,
-          onSelected: (checked) {
+        return AppFilterChip(
+          label: category,
+          isSelected: isSelected,
+          onTap: () {
             final next = Set<String>.from(selected);
-            if (checked) {
-              next.add(category);
-            } else {
+            if (isSelected) {
               next.remove(category);
+            } else {
+              next.add(category);
             }
             onChanged(next);
           },

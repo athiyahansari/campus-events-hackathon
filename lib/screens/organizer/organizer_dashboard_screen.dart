@@ -1,98 +1,180 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/event_image_helper.dart';
+import '../../widgets/app_widgets.dart';
 import 'create_event_screen.dart';
 import 'manage_event_screen.dart';
 
-class OrganizerDashboardScreen extends StatelessWidget {
+class OrganizerDashboardScreen extends StatefulWidget {
   const OrganizerDashboardScreen({super.key});
+
+  @override
+  State<OrganizerDashboardScreen> createState() => _OrganizerDashboardScreenState();
+}
+
+class _OrganizerDashboardScreenState extends State<OrganizerDashboardScreen> {
+  bool _seeding = false;
+
+  Future<void> _seedDemoEvents(String organizerId, String club) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add demo events?'),
+        content: Text(
+          'This creates three sample events under $club — one happening now, one tomorrow, '
+          'and one archived. Useful for populating a demo.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Create')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _seeding = true);
+    try {
+      await context.read<FirestoreService>().seedDemoData(organizerId: organizerId, club: club);
+      if (!mounted) return;
+      showAppSnack(context, 'Three demo events created.');
+    } catch (e) {
+      if (!mounted) return;
+      // Previously this always claimed success even when the write was
+      // rejected — now a failure is actually surfaced.
+      showAppSnack(context, 'Could not create demo events: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _seeding = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final club = auth.userProfile?.club;
+    final profile = auth.userProfile;
+    final club = profile?.club;
     final uid = auth.firebaseUser?.uid;
     final firestore = context.read<FirestoreService>();
+    final p = context.palette;
 
     if (club == null || uid == null) {
-      return const Scaffold(body: Center(child: Text('No club assigned to this account.')));
+      return Scaffold(
+        backgroundColor: p.background,
+        body: const AppEmptyState(
+          icon: Icons.badge_outlined,
+          title: 'No club assigned',
+          message:
+              'This organizer account has no club/school attached, so it cannot create events. '
+              'Ask an admin to check the account.',
+        ),
+      );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: p.background,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CreateEventScreen()),
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('New Event'),
+        backgroundColor: p.accent,
+        foregroundColor: Colors.white,
+      ),
       body: StreamBuilder<List<EventModel>>(
         stream: firestore.organizerEvents(organizerId: uid),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Something went wrong: ${snapshot.error}'));
+            return AppErrorState(
+              message: 'We could not load your events. Check your connection and try again.',
+              onRetry: () => setState(() {}),
+            );
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final events = snapshot.data!;
-          
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _HeaderSection(club: club),
-              const SizedBox(height: 16),
-              _StatsGrid(events: events),
-              const SizedBox(height: 24),
-              if (events.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text('No events yet. Create one to get started!', style: TextStyle(color: Colors.black54)),
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              await Future<void>.delayed(const Duration(milliseconds: 400));
+              if (mounted) setState(() {});
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 96),
+              children: [
+                Text(
+                  'Organizer Dashboard',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: p.textPrimary),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Icon(Icons.account_balance_outlined, size: 14, color: p.textSecondary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(club, style: TextStyle(fontSize: 13, color: p.textSecondary)),
+                    ),
+                    if (profile != null)
+                      AppTag(
+                        label: profile.organizerApproved ? 'Approved' : 'Pending approval',
+                        color: profile.organizerApproved ? p.success : p.warning,
+                        icon: profile.organizerApproved ? Icons.verified : Icons.hourglass_top,
+                      ),
+                  ],
+                ),
+                if (profile != null && !profile.organizerApproved) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: p.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: p.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: p.warning),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Text(
+                            'Your account is awaiting admin approval. You can create and save drafts, '
+                            'but publishing is locked until approved.',
+                            style: TextStyle(fontSize: 12, color: p.textPrimary, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              else
-                ...events.map((e) => _EventCard(event: e)),
-              const SizedBox(height: 64),
-            ],
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                _StatsGrid(events: events),
+                const SizedBox(height: AppSpacing.xl),
+                AppSectionHeader(
+                  title: 'Your events',
+                  subtitle: events.isEmpty ? null : '${events.length} total',
+                ),
+                if (events.isEmpty)
+                  AppEmptyState(
+                    icon: Icons.event_note_outlined,
+                    title: 'No events yet',
+                    message: 'Create your first event, or drop in a few demo events to explore the app.',
+                    actionLabel: _seeding ? 'Creating…' : 'Add demo events',
+                    onAction: _seeding ? null : () => _seedDemoEvents(uid, club),
+                  )
+                else
+                  ...events.map((e) => _EventCard(event: e)),
+              ],
+            ),
           );
         },
       ),
-    );
-  }
-}
-
-class _HeaderSection extends StatelessWidget {
-  final String club;
-  const _HeaderSection({required this.club});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Organizer Dashboard',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D)),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Publish, manage, and archive campus events.',
-          style: TextStyle(fontSize: 14, color: Colors.black54),
-        ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CreateEventScreen()),
-          ),
-          icon: const Icon(Icons.add),
-          label: const Text('New Event'),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF3366FF),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -103,23 +185,24 @@ class _StatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final active = events.where((e) => e.status == EventStatus.published).length;
-    final archived = events.where((e) => e.status == EventStatus.archived).length;
-    final capacity = events.fold(0, (sum, e) => sum + e.capacity);
+    final drafts = events.where((e) => e.status == EventStatus.draft).length;
     final registrations = events.fold(0, (sum, e) => sum + e.registeredCount);
+    final checkedIn = events.fold(0, (sum, e) => sum + e.checkedInCount);
 
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.8,
+      crossAxisSpacing: AppSpacing.md,
+      mainAxisSpacing: AppSpacing.md,
+      childAspectRatio: 2.1,
       children: [
-        _StatBox(value: active.toString(), label: 'Active Events'),
-        _StatBox(value: archived.toString(), label: 'Archived'),
-        _StatBox(value: capacity.toString(), label: 'Total Capacity'),
-        _StatBox(value: registrations.toString(), label: 'Registrations'),
+        _StatBox(value: '$active', label: 'Published', icon: Icons.podcasts, color: p.success),
+        _StatBox(value: '$drafts', label: 'Drafts', icon: Icons.edit_note, color: p.textSecondary),
+        _StatBox(value: '$registrations', label: 'Registrations', icon: Icons.people_outline, color: p.info),
+        _StatBox(value: '$checkedIn', label: 'Checked in', icon: Icons.how_to_reg, color: p.highlight),
       ],
     );
   }
@@ -128,26 +211,51 @@ class _StatsGrid extends StatelessWidget {
 class _StatBox extends StatelessWidget {
   final String value;
   final String label;
+  final IconData icon;
+  final Color color;
 
-  const _StatBox({required this.value, required this.label});
+  const _StatBox({required this.value, required this.label, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
+        color: p.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: p.border),
+        boxShadow: context.cardShadow,
       ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
         children: [
-          Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E2F4D))),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: p.textPrimary),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: p.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -161,109 +269,97 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final now = DateTime.now();
     final isLive = event.status == EventStatus.published &&
-        event.startTime.isBefore(DateTime.now().add(const Duration(hours: 1))) &&
-        event.endTime.isAfter(DateTime.now());
+        event.startTime.isBefore(now) &&
+        event.endTime.isAfter(now);
+    final needsArchiving = event.status != EventStatus.archived && event.endTime.isBefore(now);
 
-    final statusText = isLive ? 'Live Now' : (event.status.name.substring(0, 1).toUpperCase() + event.status.name.substring(1));
-    final statusColor = isLive ? Colors.green : (event.status == EventStatus.published ? Colors.blue : Colors.grey);
+    final (statusLabel, statusColor) = switch (event.status) {
+      _ when isLive => ('Live now', p.success),
+      EventStatus.draft => ('Draft', p.textSecondary),
+      EventStatus.published => ('Published', p.info),
+      EventStatus.concluded => ('Concluded', p.warning),
+      EventStatus.archived => ('Archived', p.textSecondary),
+    };
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ManageEventScreen(event: event)),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => ManageEventScreen(event: event)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: CachedNetworkImage(
+              imageUrl: getEventBannerUrl(event.category, event.bannerImageUrl, eventId: event.id),
+              width: 68,
+              height: 68,
+              fit: BoxFit.cover,
+              placeholder: (_, _) => Container(width: 68, height: 68, color: p.surfaceAlt),
+              errorWidget: (_, _, _) => Container(
+                width: 68,
+                height: 68,
+                color: p.surfaceAlt,
+                child: Icon(Icons.event, color: p.textSecondary),
+              ),
+            ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CachedNetworkImage(
-                    imageUrl: (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty) ? event.bannerImageUrl! : 'https://via.placeholder.com/150',
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => Container(
-                      width: 72,
-                      height: 72,
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.image_not_supported, color: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(event.category, style: const TextStyle(fontSize: 10, color: Colors.blue)),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                if (isLive) ...[
-                                  Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor)),
-                                  const SizedBox(width: 4),
-                                ],
-                                Text(statusText, style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E2F4D)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venue}',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                Row(
+                  children: [
+                    AppTag(label: statusLabel, color: statusColor, icon: isLive ? Icons.circle : null),
+                    if (needsArchiving) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      AppTag(label: 'Needs archiving', color: p.danger),
                     ],
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ManageEventScreen(event: event)),
-                  ),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('Manage', style: TextStyle(color: Colors.black87, fontSize: 12)),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  event.title,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: p.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${DateFormat('MMM d, h:mm a').format(event.startTime)} · ${event.venue}',
+                  style: TextStyle(fontSize: 12, color: p.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Icon(Icons.people_outline, size: 13, color: p.textSecondary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '${event.registeredCount}/${event.capacity}',
+                      style: TextStyle(fontSize: 12, color: p.textSecondary),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Icon(Icons.how_to_reg, size: 13, color: p.textSecondary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '${event.checkedInCount}',
+                      style: TextStyle(fontSize: 12, color: p.textSecondary),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        ),
+          Icon(Icons.chevron_right, color: p.textSecondary),
+        ],
       ),
     );
   }

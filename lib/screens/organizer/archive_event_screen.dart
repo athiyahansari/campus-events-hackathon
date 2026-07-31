@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
 import '../../services/firestore_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_widgets.dart';
 
 class ArchiveEventScreen extends StatefulWidget {
   final EventModel event;
@@ -29,9 +31,7 @@ class _ArchiveEventScreenState extends State<ArchiveEventScreen> {
 
   Future<void> _submit() async {
     if (_summaryController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write a short summary of the event.')),
-      );
+      showAppSnack(context, 'Please write a short summary of the event.', isError: true);
       return;
     }
     final photos = _photoControllers.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
@@ -44,12 +44,14 @@ class _ArchiveEventScreenState extends State<ArchiveEventScreen> {
             summary: _summaryController.text.trim(),
           );
       if (!mounted) return;
+      // Pop both this screen and the manage screen behind it.
       Navigator.of(context)
         ..pop()
         ..pop();
+      showAppSnack(context, 'Event archived and published to the public archive.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to archive: $e')));
+      showAppSnack(context, 'Could not archive event: $e', isError: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -57,56 +59,109 @@ class _ArchiveEventScreenState extends State<ArchiveEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     return Scaffold(
+      backgroundColor: p.background,
       appBar: AppBar(title: const Text('Archive Event')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          Text(
-            'Archiving moves "${widget.event.title}" into the public Historical Archive.',
-            style: Theme.of(context).textTheme.bodyMedium,
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: p.info.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: p.info.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 18, color: p.info),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    'Archiving moves "${widget.event.title}" into the public archive, where anyone '
+                    'can read the recap. This cannot be undone from the app.',
+                    style: TextStyle(fontSize: 12.5, color: p.textPrimary, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.xl),
+
+          Text(
+            'Event recap',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: p.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _summaryController,
-            decoration: const InputDecoration(labelText: 'Event summary'),
-            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'How did it go? Highlights, turnout, winners…',
+            ),
+            maxLines: 5,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: 20),
-          Text('Photos', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xl),
+
+          Text(
+            'Photos (optional)',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: p.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Paste image URLs to show a gallery on the archive page.',
+            style: TextStyle(fontSize: 12, color: p.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.md),
           for (int i = 0; i < _photoControllers.length; i++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _photoControllers[i],
-                      decoration: InputDecoration(labelText: 'Photo URL ${i + 1}'),
+                      decoration: InputDecoration(hintText: 'Photo URL ${i + 1}'),
                       keyboardType: TextInputType.url,
                     ),
                   ),
                   if (_photoControllers.length > 1)
                     IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: () => setState(() => _photoControllers.removeAt(i)),
+                      icon: Icon(Icons.remove_circle_outline, color: p.danger),
+                      tooltip: 'Remove',
+                      onPressed: () => setState(() {
+                        _photoControllers.removeAt(i).dispose();
+                      }),
                     ),
                 ],
               ),
             ),
-          TextButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add another photo URL'),
-            onPressed: () => setState(() => _photoControllers.add(TextEditingController())),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add another photo'),
+              onPressed: () => setState(() => _photoControllers.add(TextEditingController())),
+            ),
           ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
-            child: _submitting
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Archive Event'),
+          const SizedBox(height: AppSpacing.xl),
+
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              icon: _submitting
+                  ? const SizedBox(
+                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.archive_outlined),
+              label: Text(_submitting ? 'Archiving…' : 'Archive event'),
+              onPressed: _submitting ? null : _submit,
+            ),
           ),
+          const SizedBox(height: AppSpacing.xl),
         ],
       ),
     );

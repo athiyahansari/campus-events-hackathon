@@ -50,6 +50,12 @@ String getEventBannerUrl(String category, String? customUrl, {String? eventId}) 
       'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&q=80',
       'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=800&q=80',
     ],
+    // Was missing, so Drama Society events fell through to the generic pool.
+    'Drama Society': [
+      'https://images.unsplash.com/photo-1503095396549-807759245b35?w=800&q=80',
+      'https://images.unsplash.com/photo-1507924538820-ede94a04019d?w=800&q=80',
+      'https://images.unsplash.com/photo-1470019693664-1d202d2c0907?w=800&q=80',
+    ],
   };
 
   final list = categoryImages[category] ?? [
