@@ -78,6 +78,13 @@ service cloud.firestore {
           isSignedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedInCount'])
           && request.resource.data.checkedInCount == resource.data.checkedInCount + 1
+        ) || (
+          // Student joins the waitlist: only when the event is actually full.
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['waitlistCount'])
+          && request.resource.data.waitlistCount == resource.data.waitlistCount + 1
+          && resource.data.status == 'published'
+          && resource.data.registeredCount >= resource.data.capacity
         );
 
       allow delete: if false;
@@ -98,12 +105,24 @@ service cloud.firestore {
 
       // Deterministic id ('<eventId>_<uid>') blocks a user from registering twice under
       // different doc ids, enforced here in addition to the client-side transaction check.
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.checkedIn == false
-        && registrationId == request.resource.data.eventId + '_' + request.auth.uid
-        && newEvent().status == 'published'
-        && newEvent().registeredCount < newEvent().capacity;
+      allow create: if isSignedIn() && (
+        (
+          request.resource.data.userId == request.auth.uid
+          && request.resource.data.checkedIn == false
+          && registrationId == request.resource.data.eventId + '_' + request.auth.uid
+          && newEvent().status == 'published'
+          && newEvent().registeredCount < newEvent().capacity
+        ) || (
+          // Organizer promotes a waitlisted student into a just-released seat.
+          ownsCategory(newEvent().category)
+          && request.resource.data.checkedIn == false
+          && registrationId == request.resource.data.eventId + '_' + request.resource.data.userId
+        )
+      );
+
+      // Organizer releases a no-show's seat (frees capacity and/or makes room to promote
+      // the next waitlisted student).
+      allow delete: if isSignedIn() && ownsCategory(event().category);
 
       // Self-check-in: a student can only flip their OWN registration to checkedIn, and only by
       // submitting a lastCheckinToken that matches the event's live activeCheckinToken at the
@@ -116,6 +135,54 @@ service cloud.firestore {
         && request.resource.data.checkedIn == true
         && event().activeCheckinToken != null
         && request.resource.data.lastCheckinToken == event().activeCheckinToken;
+
+      // Note: `reminderSent` is only ever written by the sendEventReminders Cloud Function
+      // (functions/index.js) via the Admin SDK, which bypasses these rules entirely — no
+      // client-side rule needed for it.
+    }
+
+    // ---------------- waitlist ----------------
+    match /waitlist/{waitlistId} {
+      function wlEvent() {
+        return get(/databases/$(database)/documents/events/$(resource.data.eventId)).data;
+      }
+      function newWlEvent() {
+        return get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data;
+      }
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || ownsCategory(wlEvent().category)
+      );
+
+      // A student can only join the waitlist for themselves, and only once the event is
+      // actually full — mirrors the registrations create rule above.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && waitlistId == request.resource.data.eventId + '_' + request.auth.uid
+        && newWlEvent().status == 'published'
+        && newWlEvent().registeredCount >= newWlEvent().capacity;
+
+      // Organizer removes an entry when promoting the student to a released seat.
+      allow delete: if isSignedIn() && ownsCategory(wlEvent().category);
+
+      allow update: if false;
+    }
+
+    // ---------------- notifications ----------------
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Organizer notifying a promoted waitlisted student. The day-before-reminder and
+      // missed-events Cloud Functions (functions/index.js) also write here via the Admin
+      // SDK, which bypasses these rules entirely.
+      allow create: if isOrganizer()
+        && request.resource.data.keys().hasOnly(['userId', 'title', 'body', 'read', 'createdAt'])
+        && request.resource.data.read == false;
+
+      // Recipient can only mark their own notification as read.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
 
       allow delete: if false;
     }

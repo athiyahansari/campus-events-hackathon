@@ -42,6 +42,7 @@ class EventModel {
   final int capacity;
   final int registeredCount;
   final int checkedInCount;
+  final int waitlistCount;
   final String? bannerImageUrl;
   final String organizerId;
   final EventStatus status;
@@ -62,6 +63,7 @@ class EventModel {
     required this.capacity,
     required this.registeredCount,
     required this.checkedInCount,
+    this.waitlistCount = 0,
     required this.bannerImageUrl,
     required this.organizerId,
     required this.status,
@@ -94,6 +96,7 @@ class EventModel {
       capacity: (map['capacity'] as num?)?.toInt() ?? 0,
       registeredCount: (map['registeredCount'] as num?)?.toInt() ?? 0,
       checkedInCount: (map['checkedInCount'] as num?)?.toInt() ?? 0,
+      waitlistCount: (map['waitlistCount'] as num?)?.toInt() ?? 0,
       bannerImageUrl: map['bannerImageUrl'] as String?,
       organizerId: map['organizerId'] as String? ?? '',
       status: eventStatusFromString(map['status'] as String? ?? 'draft'),
@@ -116,6 +119,7 @@ class EventModel {
       'capacity': capacity,
       'registeredCount': registeredCount,
       'checkedInCount': checkedInCount,
+      'waitlistCount': waitlistCount,
       'bannerImageUrl': bannerImageUrl,
       'organizerId': organizerId,
       'status': eventStatusToString(status),

@@ -7,6 +7,7 @@ class RegistrationModel {
   final bool checkedIn;
   final DateTime? checkedInAt;
   final DateTime? registeredAt;
+  final bool reminderSent;
 
   RegistrationModel({
     required this.id,
@@ -15,6 +16,7 @@ class RegistrationModel {
     required this.checkedIn,
     required this.checkedInAt,
     required this.registeredAt,
+    this.reminderSent = false,
   });
 
   factory RegistrationModel.fromMap(String id, Map<String, dynamic> map) {
@@ -25,6 +27,7 @@ class RegistrationModel {
       checkedIn: map['checkedIn'] as bool? ?? false,
       checkedInAt: (map['checkedInAt'] as Timestamp?)?.toDate(),
       registeredAt: (map['registeredAt'] as Timestamp?)?.toDate(),
+      reminderSent: map['reminderSent'] as bool? ?? false,
     );
   }
 
@@ -35,6 +38,7 @@ class RegistrationModel {
       'checkedIn': checkedIn,
       'checkedInAt': checkedInAt != null ? Timestamp.fromDate(checkedInAt!) : null,
       'registeredAt': registeredAt != null ? Timestamp.fromDate(registeredAt!) : FieldValue.serverTimestamp(),
+      'reminderSent': reminderSent,
     };
   }
 }

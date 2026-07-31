@@ -74,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
       club: userProfile!.club,
       interests: interests,
       createdAt: userProfile!.createdAt,
+      lastActiveAt: userProfile!.lastActiveAt,
     );
     notifyListeners();
   }

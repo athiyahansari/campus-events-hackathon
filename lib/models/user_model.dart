@@ -18,6 +18,7 @@ class UserModel {
   final String? club;
   final List<String> interests;
   final DateTime? createdAt;
+  final DateTime? lastActiveAt;
 
   UserModel({
     required this.uid,
@@ -27,6 +28,7 @@ class UserModel {
     required this.club,
     required this.createdAt,
     this.interests = const [],
+    this.lastActiveAt,
   });
 
   factory UserModel.fromMap(String uid, Map<String, dynamic> map) {
@@ -38,6 +40,7 @@ class UserModel {
       club: map['club'] as String?,
       interests: List<String>.from(map['interests'] as List? ?? []),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
+      lastActiveAt: (map['lastActiveAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -49,6 +52,7 @@ class UserModel {
       'club': club,
       'interests': interests,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'lastActiveAt': lastActiveAt != null ? Timestamp.fromDate(lastActiveAt!) : null,
     };
   }
 

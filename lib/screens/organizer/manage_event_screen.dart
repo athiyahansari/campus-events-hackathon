@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
+import '../../models/waitlist_model.dart';
 import '../../services/firestore_service.dart';
 import 'archive_event_screen.dart';
 import 'checkin_display_screen.dart';
@@ -19,6 +20,23 @@ class ManageEventScreen extends StatelessWidget {
       'status': eventStatusToString(status),
     });
     if (context.mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _releaseSeat(
+    BuildContext context,
+    FirestoreService firestore,
+    String registrationId,
+  ) async {
+    try {
+      await firestore.releaseNoShowSeat(eventId: event.id, noShowRegistrationId: registrationId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seat released. The best-matched waitlisted student (if any) was notified.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 
   @override
@@ -57,6 +75,7 @@ class ManageEventScreen extends StatelessWidget {
                   _Stat(label: 'Capacity', value: '${current.capacity}'),
                   _Stat(label: 'Registered', value: '${current.registeredCount}'),
                   _Stat(label: 'Checked in', value: '${current.checkedInCount}'),
+                  _Stat(label: 'Waitlisted', value: '${current.waitlistCount}'),
                 ],
               ),
               const SizedBox(height: 24),
@@ -138,11 +157,13 @@ class ManageEventScreen extends StatelessWidget {
                   if (registrations.isEmpty) {
                     return const Text('No one has registered yet.');
                   }
+                  final canReleaseSeats = DateTime.now().isAfter(current.startTime);
                   return Column(
                     children: registrations.map((r) {
                       return FutureBuilder<String>(
                         future: firestore.fetchUserName(r.userId),
                         builder: (context, nameSnapshot) {
+                          final showRelease = canReleaseSeats && !r.checkedIn;
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
@@ -150,7 +171,44 @@ class ManageEventScreen extends StatelessWidget {
                               color: r.checkedIn ? Colors.green : null,
                             ),
                             title: Text(nameSnapshot.data ?? 'Loading…'),
-                            trailing: Text(r.checkedIn ? 'Checked in' : 'Registered'),
+                            trailing: showRelease
+                                ? TextButton(
+                                    onPressed: () => _releaseSeat(context, firestore, r.id),
+                                    child: const Text('Release seat'),
+                                  )
+                                : Text(r.checkedIn ? 'Checked in' : 'Registered'),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const Divider(height: 32),
+              Text('Waitlist', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              StreamBuilder<List<WaitlistModel>>(
+                stream: firestore.eventWaitlist(current.id),
+                builder: (context, waitlistSnapshot) {
+                  if (!waitlistSnapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final waitlist = waitlistSnapshot.data!;
+                  if (waitlist.isEmpty) {
+                    return const Text('No one is on the waitlist.');
+                  }
+                  return Column(
+                    children: waitlist.map((w) {
+                      return FutureBuilder<String>(
+                        future: firestore.fetchUserName(w.userId),
+                        builder: (context, nameSnapshot) {
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.hourglass_top),
+                            title: Text(nameSnapshot.data ?? 'Loading…'),
                           );
                         },
                       );

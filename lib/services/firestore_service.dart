@@ -2,16 +2,25 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/event_model.dart';
+import '../models/notification_model.dart';
 import '../models/registration_model.dart';
+import '../models/waitlist_model.dart';
 
-class EventFullException implements Exception {
-  @override
-  String toString() => 'This event has reached capacity.';
-}
+enum RegistrationOutcome { registered, waitlisted }
 
 class AlreadyRegisteredException implements Exception {
   @override
   String toString() => 'You are already registered for this event.';
+}
+
+class AlreadyWaitlistedException implements Exception {
+  @override
+  String toString() => "You're already on the waitlist for this event.";
+}
+
+class EmptyWaitlistException implements Exception {
+  @override
+  String toString() => 'No one is on the waitlist for this event.';
 }
 
 class NotRegisteredException implements Exception {
@@ -35,6 +44,8 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> get _events => _db.collection('events');
   CollectionReference<Map<String, dynamic>> get _registrations => _db.collection('registrations');
+  CollectionReference<Map<String, dynamic>> get _waitlist => _db.collection('waitlist');
+  CollectionReference<Map<String, dynamic>> get _notifications => _db.collection('notifications');
 
   // ---------------- Events ----------------
 
@@ -131,17 +142,24 @@ class FirestoreService {
   /// Registers [userId] for [eventId], enforcing capacity and one-registration-per-user
   /// atomically via transaction. Uses a deterministic doc ID so the duplicate check and
   /// the write happen inside the same transaction (no race between concurrent requests).
-  Future<RegistrationModel> registerForEvent({
+  /// If the event is already at capacity, adds [userId] to the waitlist instead so an
+  /// organizer can promote them later via [releaseNoShowSeat].
+  Future<RegistrationOutcome> registerForEvent({
     required String eventId,
     required String userId,
   }) async {
     final registrationRef = _registrations.doc('${eventId}_$userId');
+    final waitlistRef = _waitlist.doc('${eventId}_$userId');
     final eventRef = _events.doc(eventId);
 
-    await _db.runTransaction((tx) async {
-      final existingSnap = await tx.get(registrationRef);
-      if (existingSnap.exists) {
+    return _db.runTransaction((tx) async {
+      final existingReg = await tx.get(registrationRef);
+      if (existingReg.exists) {
         throw AlreadyRegisteredException();
+      }
+      final existingWaitlist = await tx.get(waitlistRef);
+      if (existingWaitlist.exists) {
+        throw AlreadyWaitlistedException();
       }
       final eventSnap = await tx.get(eventRef);
       if (!eventSnap.exists) {
@@ -150,9 +168,18 @@ class FirestoreService {
       final data = eventSnap.data()!;
       final capacity = (data['capacity'] as num?)?.toInt() ?? 0;
       final registeredCount = (data['registeredCount'] as num?)?.toInt() ?? 0;
+
       if (registeredCount >= capacity) {
-        throw EventFullException();
+        final waitlistCount = (data['waitlistCount'] as num?)?.toInt() ?? 0;
+        tx.set(waitlistRef, {
+          'eventId': eventId,
+          'userId': userId,
+          'joinedAt': FieldValue.serverTimestamp(),
+        });
+        tx.update(eventRef, {'waitlistCount': waitlistCount + 1});
+        return RegistrationOutcome.waitlisted;
       }
+
       tx.set(registrationRef, {
         'eventId': eventId,
         'userId': userId,
@@ -161,10 +188,147 @@ class FirestoreService {
         'registeredAt': FieldValue.serverTimestamp(),
       });
       tx.update(eventRef, {'registeredCount': registeredCount + 1});
+      return RegistrationOutcome.registered;
+    });
+  }
+
+  // ---------------- Waitlist ----------------
+
+  Stream<WaitlistModel?> watchWaitlistEntry({required String eventId, required String userId}) {
+    return _waitlist.doc('${eventId}_$userId').snapshots().map(
+          (d) => d.exists ? WaitlistModel.fromMap(d.id, d.data()!) : null,
+        );
+  }
+
+  Stream<List<WaitlistModel>> userWaitlistEntries(String userId) {
+    return _waitlist.where('userId', isEqualTo: userId).snapshots().map(
+          (snap) => snap.docs.map((d) => WaitlistModel.fromMap(d.id, d.data())).toList(),
+        );
+  }
+
+  Stream<List<WaitlistModel>> eventWaitlist(String eventId) {
+    return _waitlist.where('eventId', isEqualTo: eventId).snapshots().map((snap) {
+      final entries = snap.docs.map((d) => WaitlistModel.fromMap(d.id, d.data())).toList();
+      entries.sort((a, b) => (a.joinedAt ?? DateTime(0)).compareTo(b.joinedAt ?? DateTime(0)));
+      return entries;
+    });
+  }
+
+  /// Releases a no-show's seat and, if anyone is waitlisted, immediately promotes the best
+  /// match — the waitlisted student whose interests include the event's category — to
+  /// registered, notifying them. Falls back to first-come-first-served among equally matched
+  /// (or unmatched) students via waitlist join order.
+  Future<void> releaseNoShowSeat({
+    required String eventId,
+    required String noShowRegistrationId,
+  }) async {
+    final eventRef = _events.doc(eventId);
+    final noShowRef = _registrations.doc(noShowRegistrationId);
+
+    final waitlistSnap = await _waitlist.where('eventId', isEqualTo: eventId).get();
+    final entries = waitlistSnap.docs.map((d) => WaitlistModel.fromMap(d.id, d.data())).toList()
+      ..sort((a, b) => (a.joinedAt ?? DateTime(0)).compareTo(b.joinedAt ?? DateTime(0)));
+
+    WaitlistModel? promoted;
+    if (entries.isNotEmpty) {
+      final eventDoc = await eventRef.get();
+      final category = eventDoc.data()?['category'] as String? ?? '';
+      final profiles = await Future.wait(entries.map((e) => _db.collection('users').doc(e.userId).get()));
+
+      var bestScore = -1;
+      for (var i = 0; i < entries.length; i++) {
+        final interests = List<String>.from(profiles[i].data()?['interests'] as List? ?? []);
+        final score = interests.contains(category) ? 1 : 0;
+        if (score > bestScore) {
+          bestScore = score;
+          promoted = entries[i];
+        }
+      }
+    }
+
+    final registrationRef = promoted != null ? _registrations.doc('${eventId}_${promoted.userId}') : null;
+    final waitlistRef = promoted != null ? _waitlist.doc(promoted.id) : null;
+
+    await _db.runTransaction((tx) async {
+      final eventSnap = await tx.get(eventRef);
+      if (!eventSnap.exists) {
+        throw Exception('Event not found.');
+      }
+      final data = eventSnap.data()!;
+      final registeredCount = (data['registeredCount'] as num?)?.toInt() ?? 0;
+      final waitlistCount = (data['waitlistCount'] as num?)?.toInt() ?? 0;
+
+      tx.delete(noShowRef);
+      final updates = <String, dynamic>{
+        'registeredCount': registeredCount > 0 ? registeredCount - 1 : 0,
+      };
+
+      if (promoted != null && registrationRef != null && waitlistRef != null) {
+        tx.set(registrationRef, {
+          'eventId': eventId,
+          'userId': promoted.userId,
+          'checkedIn': false,
+          'checkedInAt': null,
+          'registeredAt': FieldValue.serverTimestamp(),
+        });
+        tx.delete(waitlistRef);
+        // A seat was freed and immediately refilled, so registeredCount is unchanged;
+        // only the waitlist shrinks.
+        updates['registeredCount'] = registeredCount;
+        updates['waitlistCount'] = waitlistCount > 0 ? waitlistCount - 1 : 0;
+      }
+
+      tx.update(eventRef, updates);
     });
 
-    final saved = await registrationRef.get();
-    return RegistrationModel.fromMap(saved.id, saved.data()!);
+    if (promoted != null) {
+      await sendNotification(
+        userId: promoted.userId,
+        title: 'A seat opened up!',
+        body: 'A spot just opened up for an event on your waitlist — you\'re registered. Check My Tickets.',
+      );
+    }
+  }
+
+  // ---------------- Notifications ----------------
+
+  Future<void> sendNotification({
+    required String userId,
+    required String title,
+    required String body,
+  }) {
+    return _notifications.add({
+      'userId': userId,
+      'title': title,
+      'body': body,
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<NotificationModel>> userNotifications(String userId) {
+    return _notifications.where('userId', isEqualTo: userId).snapshots().map((snap) {
+      final items = snap.docs.map((d) => NotificationModel.fromMap(d.id, d.data())).toList();
+      items.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      return items;
+    });
+  }
+
+  Future<void> markNotificationRead(String notificationId) {
+    return _notifications.doc(notificationId).update({'read': true});
+  }
+
+  /// Stores the device's current FCM token so the `sendPushOnNotificationCreate` Cloud
+  /// Function (see functions/index.js) can target it. Called on login and on token refresh.
+  Future<void> savePushToken(String userId, String token) {
+    return _db.collection('users').doc(userId).update({'fcmToken': token});
+  }
+
+  /// Records that [userId] opened the app. The `sendMissedEventsNudge` scheduled Cloud
+  /// Function uses this as the baseline for "events that happened while you were away" —
+  /// see functions/index.js.
+  Future<void> recordAppOpen(String userId) {
+    return _db.collection('users').doc(userId).update({'lastActiveAt': FieldValue.serverTimestamp()});
   }
 
   /// Self-check-in: [userId] scanned [scannedToken] off the organizer's projected QR for

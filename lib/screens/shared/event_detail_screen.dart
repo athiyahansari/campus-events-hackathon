@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
+import '../../models/waitlist_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/event_badge_chip.dart';
@@ -27,10 +28,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _registering = true);
     final firestore = context.read<FirestoreService>();
     try {
-      await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
+      final outcome = await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("You're registered! We'll see you there.")),
+        SnackBar(
+          content: Text(
+            outcome == RegistrationOutcome.registered
+                ? "You're registered! We'll see you there."
+                : "This event is full — you've been added to the waitlist. We'll notify you if a seat opens up.",
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -170,12 +177,24 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           );
         }
 
-        final disabled = _registering || event.isFull;
-        return FilledButton(
-          onPressed: disabled ? null : () => _register(userId),
-          child: _registering
-              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(event.isFull ? 'Event Full' : 'Register'),
+        return StreamBuilder<WaitlistModel?>(
+          stream: firestore.watchWaitlistEntry(eventId: event.id, userId: userId),
+          builder: (context, waitlistSnapshot) {
+            if (waitlistSnapshot.data != null) {
+              return const Chip(
+                label: Text("You're on the waitlist"),
+                avatar: Icon(Icons.hourglass_top, size: 18),
+              );
+            }
+
+            final disabled = _registering || event.isFull;
+            return FilledButton(
+              onPressed: disabled ? null : () => _register(userId),
+              child: _registering
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(event.isFull ? 'Join Waitlist' : 'Register'),
+            );
+          },
         );
       },
     );

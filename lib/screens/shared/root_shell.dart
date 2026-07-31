@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../services/firestore_service.dart';
+import '../../services/push_notification_service.dart';
 import '../auth/login_screen.dart';
 import '../organizer/organizer_dashboard_screen.dart';
 import '../student/my_tickets_screen.dart';
@@ -18,6 +20,7 @@ class RootShell extends StatefulWidget {
 
 class _RootShellState extends State<RootShell> {
   int _index = 0;
+  bool _pushInitStarted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +32,15 @@ class _RootShellState extends State<RootShell> {
 
     final isAuthenticated = auth.status == AuthStatus.authenticated;
     final isOrganizer = auth.isOrganizer;
+
+    if (isAuthenticated && !isOrganizer && !_pushInitStarted && auth.userProfile != null) {
+      _pushInitStarted = true;
+      final userId = auth.userProfile!.uid;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<PushNotificationService>().initForUser(userId);
+        context.read<FirestoreService>().recordAppOpen(userId);
+      });
+    }
 
     final destinations = <_ShellTab>[
       _ShellTab('Feed', Icons.event, const PublicFeedScreen()),
