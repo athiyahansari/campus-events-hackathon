@@ -1,13 +1,17 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
-import '../../utils/clubs.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
+  final EventModel? existingEvent;
+
+  const CreateEventScreen({super.key, this.existingEvent});
+
+  bool get isEditing => existingEvent != null;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -15,17 +19,30 @@ class CreateEventScreen extends StatefulWidget {
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _venueController = TextEditingController();
-  final _capacityController = TextEditingController();
-  final _bannerUrlController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _venueController;
+  late final TextEditingController _capacityController;
+  late final TextEditingController _bannerUrlController;
 
-  String _category = kCampusCategories.first;
   DateTime? _startTime;
   DateTime? _endTime;
   bool _publishImmediately = true;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingEvent;
+    _titleController = TextEditingController(text: existing?.title ?? '');
+    _descriptionController = TextEditingController(text: existing?.description ?? '');
+    _venueController = TextEditingController(text: existing?.venue ?? '');
+    _capacityController = TextEditingController(text: existing != null ? '${existing.capacity}' : '');
+    _bannerUrlController = TextEditingController(text: existing?.bannerImageUrl ?? '');
+    _startTime = existing?.startTime;
+    _endTime = existing?.endTime;
+    _publishImmediately = existing == null || existing.status == EventStatus.published;
+  }
 
   @override
   void dispose() {
@@ -71,34 +88,47 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     final auth = context.read<AuthProvider>();
     final profile = auth.userProfile!;
+    final firestore = context.read<FirestoreService>();
 
     setState(() => _submitting = true);
     try {
-      final event = EventModel(
-        id: '',
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        category: _category,
-        venue: _venueController.text.trim(),
-        startTime: _startTime!,
-        endTime: _endTime!,
-        capacity: int.parse(_capacityController.text.trim()),
-        registeredCount: 0,
-        checkedInCount: 0,
-        bannerImageUrl: _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
-        organizerId: auth.firebaseUser!.uid,
-        club: profile.club!,
-        status: _publishImmediately ? EventStatus.published : EventStatus.draft,
-        archivePhotos: const [],
-        archiveSummary: null,
-        createdAt: DateTime.now(),
-      );
-      await context.read<FirestoreService>().createEvent(event);
+      if (widget.isEditing) {
+        await firestore.updateEvent(widget.existingEvent!.id, {
+          'title': _titleController.text.trim(),
+          'description': _descriptionController.text.trim(),
+          'venue': _venueController.text.trim(),
+          'startTime': Timestamp.fromDate(_startTime!),
+          'endTime': Timestamp.fromDate(_endTime!),
+          'capacity': int.parse(_capacityController.text.trim()),
+          'bannerImageUrl': _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
+          'status': eventStatusToString(_publishImmediately ? EventStatus.published : EventStatus.draft),
+        });
+      } else {
+        final event = EventModel(
+          id: '',
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          category: profile.club!,
+          venue: _venueController.text.trim(),
+          startTime: _startTime!,
+          endTime: _endTime!,
+          capacity: int.parse(_capacityController.text.trim()),
+          registeredCount: 0,
+          checkedInCount: 0,
+          bannerImageUrl: _bannerUrlController.text.trim().isEmpty ? null : _bannerUrlController.text.trim(),
+          organizerId: auth.firebaseUser!.uid,
+          status: _publishImmediately ? EventStatus.published : EventStatus.draft,
+          archivePhotos: const [],
+          archiveSummary: null,
+          createdAt: DateTime.now(),
+        );
+        await firestore.createEvent(event);
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create event: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save event: $e')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -112,8 +142,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final category = widget.existingEvent?.category ?? context.watch<AuthProvider>().userProfile?.club ?? '';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(title: Text(widget.isEditing ? 'Edit Event' : 'Create Event')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -132,11 +164,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a description' : null,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _category,
+            InputDecorator(
               decoration: const InputDecoration(labelText: 'Category'),
-              items: kCampusCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-              onChanged: (v) => setState(() => _category = v!),
+              child: Text(category),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Events are always categorized under your own club/school.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -195,7 +230,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               onPressed: _submitting ? null : _submit,
               child: _submitting
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(_publishImmediately ? 'Publish Event' : 'Save Draft'),
+                  : Text(widget.isEditing ? 'Save Changes' : (_publishImmediately ? 'Publish Event' : 'Save Draft')),
             ),
           ],
         ),

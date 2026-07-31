@@ -27,10 +27,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _registering = true);
     final firestore = context.read<FirestoreService>();
     try {
-      await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
+      final registration = await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registered! Your QR ticket is ready.')),
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TicketScreen(event: widget.event, registration: registration, justRegistered: true),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

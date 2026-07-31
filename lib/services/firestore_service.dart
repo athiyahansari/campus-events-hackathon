@@ -41,8 +41,8 @@ class FirestoreService {
     });
   }
 
-  Stream<List<EventModel>> organizerEvents({required String club}) {
-    return _events.where('club', isEqualTo: club).snapshots().map((snap) {
+  Stream<List<EventModel>> organizerEvents({required String organizerId}) {
+    return _events.where('organizerId', isEqualTo: organizerId).snapshots().map((snap) {
       final events = snap.docs.map((d) => EventModel.fromMap(d.id, d.data())).toList();
       events.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
       return events;
@@ -99,6 +99,11 @@ class FirestoreService {
         .where('eventId', isEqualTo: eventId)
         .snapshots()
         .map((snap) => snap.docs.map((d) => RegistrationModel.fromMap(d.id, d.data())).toList());
+  }
+
+  Future<String> fetchUserName(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    return (doc.data()?['name'] as String?) ?? 'Unknown student';
   }
 
   /// Registers [userId] for [eventId], enforcing capacity and one-registration-per-user

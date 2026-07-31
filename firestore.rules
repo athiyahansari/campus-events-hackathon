@@ -15,8 +15,11 @@ service cloud.firestore {
       return isSignedIn() && userData().role == 'organizer';
     }
 
-    function ownsClub(club) {
-      return isOrganizer() && userData().club == club;
+    // An organizer's own club must match the event's category — events are always
+    // categorized under the organizer's own club/school (enforced in the client's
+    // create-event form too, but this is the real boundary).
+    function ownsCategory(category) {
+      return isOrganizer() && userData().club == category;
     }
 
     function unchanged(field) {
@@ -32,7 +35,7 @@ service cloud.firestore {
         && request.resource.data.role in ['student', 'organizer']
         && (request.resource.data.role == 'student' || request.resource.data.club is string);
 
-      // Name is editable; role/club are immutable after signup to block privilege escalation.
+      // Name/interests are editable; role/club are immutable after signup to block privilege escalation.
       allow update: if isSignedIn()
         && request.auth.uid == uid
         && unchanged('role')
@@ -44,24 +47,24 @@ service cloud.firestore {
     // ---------------- events ----------------
     match /events/{eventId} {
       allow read: if resource.data.status in ['published', 'archived']
-        || ownsClub(resource.data.club);
+        || ownsCategory(resource.data.category);
 
       allow create: if isOrganizer()
         && request.resource.data.organizerId == request.auth.uid
-        && request.resource.data.club == userData().club
+        && request.resource.data.category == userData().club
         && request.resource.data.registeredCount == 0
         && request.resource.data.checkedInCount == 0
         && request.resource.data.status in ['draft', 'published'];
 
-      // (a) Organizer manages their own club's event (can't reassign owner/club to dodge the rule).
+      // (a) Organizer manages their own club's event (can't reassign owner/category to dodge the rule).
       // (b) Student registration: the ONLY write a student can make to this collection is an
       //     atomic +1 to registeredCount, and only while the event is published and under capacity.
       // (c) Organizer check-in: the ONLY write a scanning organizer can make is an atomic +1 to
       //     checkedInCount for their own club's event.
       allow update: if (
-          ownsClub(resource.data.club)
+          ownsCategory(resource.data.category)
           && unchanged('organizerId')
-          && unchanged('club')
+          && unchanged('category')
         ) || (
           isSignedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount'])
@@ -69,7 +72,7 @@ service cloud.firestore {
           && resource.data.status == 'published'
           && resource.data.registeredCount < resource.data.capacity
         ) || (
-          ownsClub(resource.data.club)
+          ownsCategory(resource.data.category)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedInCount'])
           && request.resource.data.checkedInCount == resource.data.checkedInCount + 1
         );
@@ -87,7 +90,7 @@ service cloud.firestore {
       }
 
       allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || ownsClub(event().club)
+        resource.data.userId == request.auth.uid || ownsCategory(event().category)
       );
 
       // Deterministic id ('<eventId>_<uid>') blocks a user from registering twice under
@@ -99,7 +102,7 @@ service cloud.firestore {
         && newEvent().status == 'published'
         && newEvent().registeredCount < newEvent().capacity;
 
-      allow update: if ownsClub(event().club)
+      allow update: if ownsCategory(event().category)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt'])
         && resource.data.checkedIn == false
         && request.resource.data.checkedIn == true;

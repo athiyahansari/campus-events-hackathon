@@ -7,19 +7,35 @@ import '../../models/registration_model.dart';
 class TicketScreen extends StatelessWidget {
   final EventModel event;
   final RegistrationModel registration;
+  final bool justRegistered;
 
-  const TicketScreen({super.key, required this.event, required this.registration});
+  const TicketScreen({
+    super.key,
+    required this.event,
+    required this.registration,
+    this.justRegistered = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Your Ticket')),
+      appBar: AppBar(title: Text(justRegistered ? 'Registration Confirmed' : 'Your Ticket')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (justRegistered) ...[
+                Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 48),
+                const SizedBox(height: 8),
+                Text(
+                  "You're registered!",
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+              ],
               Text(event.title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text(event.venue, textAlign: TextAlign.center),
@@ -45,6 +61,13 @@ class TicketScreen extends StatelessWidget {
                 )
               else
                 const Text('Show this QR code at the door to check in.'),
+              if (justRegistered) ...[
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
             ],
           ),
         ),

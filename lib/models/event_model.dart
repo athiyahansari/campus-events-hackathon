@@ -44,7 +44,6 @@ class EventModel {
   final int checkedInCount;
   final String? bannerImageUrl;
   final String organizerId;
-  final String club;
   final EventStatus status;
   final List<String> archivePhotos;
   final String? archiveSummary;
@@ -63,7 +62,6 @@ class EventModel {
     required this.checkedInCount,
     required this.bannerImageUrl,
     required this.organizerId,
-    required this.club,
     required this.status,
     required this.archivePhotos,
     required this.archiveSummary,
@@ -94,7 +92,6 @@ class EventModel {
       checkedInCount: (map['checkedInCount'] as num?)?.toInt() ?? 0,
       bannerImageUrl: map['bannerImageUrl'] as String?,
       organizerId: map['organizerId'] as String? ?? '',
-      club: map['club'] as String? ?? '',
       status: eventStatusFromString(map['status'] as String? ?? 'draft'),
       archivePhotos: List<String>.from(map['archivePhotos'] as List? ?? []),
       archiveSummary: map['archiveSummary'] as String?,
@@ -115,7 +112,6 @@ class EventModel {
       'checkedInCount': checkedInCount,
       'bannerImageUrl': bannerImageUrl,
       'organizerId': organizerId,
-      'club': club,
       'status': eventStatusToString(status),
       'archivePhotos': archivePhotos,
       'archiveSummary': archiveSummary,

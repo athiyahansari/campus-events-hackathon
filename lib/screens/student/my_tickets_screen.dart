@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
@@ -44,13 +45,20 @@ class MyTicketsScreen extends StatelessWidget {
                   if (event == null) return const SizedBox.shrink();
                   return Card(
                     child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(4),
+                        color: Colors.white,
+                        child: QrImageView(
+                          data: registration.qrCodeData,
+                          size: 44,
+                          version: QrVersions.auto,
+                        ),
+                      ),
                       title: Text(event.title),
                       subtitle: Text(
                         '${event.venue} · ${DateFormat('MMM d, h:mm a').format(event.startTime)}',
                       ),
-                      trailing: registration.checkedIn
-                          ? const Chip(label: Text('Checked in'))
-                          : const Icon(Icons.qr_code),
+                      trailing: registration.checkedIn ? const Chip(label: Text('Checked in')) : null,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => TicketScreen(event: event, registration: registration),

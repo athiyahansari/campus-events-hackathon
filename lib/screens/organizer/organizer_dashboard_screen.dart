@@ -12,10 +12,12 @@ class OrganizerDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = context.watch<AuthProvider>().userProfile?.club;
+    final auth = context.watch<AuthProvider>();
+    final club = auth.userProfile?.club;
+    final uid = auth.firebaseUser?.uid;
     final firestore = context.read<FirestoreService>();
 
-    if (club == null) {
+    if (club == null || uid == null) {
       return const Scaffold(body: Center(child: Text('No club assigned to this account.')));
     }
 
@@ -29,7 +31,7 @@ class OrganizerDashboardScreen extends StatelessWidget {
         label: const Text('New Event'),
       ),
       body: StreamBuilder<List<EventModel>>(
-        stream: firestore.organizerEvents(club: club),
+        stream: firestore.organizerEvents(organizerId: uid),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Something went wrong: ${snapshot.error}'));

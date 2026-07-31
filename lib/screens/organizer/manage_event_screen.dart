@@ -3,8 +3,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/event_model.dart';
+import '../../models/registration_model.dart';
 import '../../services/firestore_service.dart';
 import 'archive_event_screen.dart';
+import 'create_event_screen.dart';
 import 'scan_screen.dart';
 
 class ManageEventScreen extends StatelessWidget {
@@ -25,7 +27,19 @@ class ManageEventScreen extends StatelessWidget {
     final firestore = context.read<FirestoreService>();
 
     return Scaffold(
-      appBar: AppBar(title: Text(event.title)),
+      appBar: AppBar(
+        title: Text(event.title),
+        actions: [
+          if (event.status == EventStatus.draft || event.status == EventStatus.published)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit Event',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => CreateEventScreen(existingEvent: event)),
+              ),
+            ),
+        ],
+      ),
       body: StreamBuilder<EventModel?>(
         stream: firestore.watchEvent(event.id),
         initialData: event,
@@ -55,7 +69,7 @@ class ManageEventScreen extends StatelessWidget {
               if (current.status == EventStatus.published) ...[
                 FilledButton.icon(
                   icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan QR to Check In'),
+                  label: const Text('Start Scanning'),
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ScanScreen(event: current)),
                   ),
@@ -70,7 +84,7 @@ class ManageEventScreen extends StatelessWidget {
               if (current.status == EventStatus.concluded) ...[
                 FilledButton.icon(
                   icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan QR to Check In'),
+                  label: const Text('Start Scanning'),
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ScanScreen(event: current)),
                   ),
@@ -92,6 +106,42 @@ class ManageEventScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text('${current.archivePhotos.length} photo(s) archived'),
               ],
+              const Divider(height: 32),
+              Text('Registered Students', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              StreamBuilder<List<RegistrationModel>>(
+                stream: firestore.eventRegistrations(current.id),
+                builder: (context, regSnapshot) {
+                  if (!regSnapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final registrations = regSnapshot.data!;
+                  if (registrations.isEmpty) {
+                    return const Text('No one has registered yet.');
+                  }
+                  return Column(
+                    children: registrations.map((r) {
+                      return FutureBuilder<String>(
+                        future: firestore.fetchUserName(r.userId),
+                        builder: (context, nameSnapshot) {
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              r.checkedIn ? Icons.check_circle : Icons.radio_button_unchecked,
+                              color: r.checkedIn ? Colors.green : null,
+                            ),
+                            title: Text(nameSnapshot.data ?? 'Loading…'),
+                            trailing: Text(r.checkedIn ? 'Checked in' : 'Registered'),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
             ],
           );
         },
