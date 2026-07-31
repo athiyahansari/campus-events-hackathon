@@ -56,11 +56,14 @@ service cloud.firestore {
         && request.resource.data.checkedInCount == 0
         && request.resource.data.status in ['draft', 'published'];
 
-      // (a) Organizer manages their own club's event (can't reassign owner/category to dodge the rule).
+      // (a) Organizer manages their own club's event (can't reassign owner/category to dodge the
+      //     rule) — this is also the only path that can touch activeCheckinToken/tokenGeneratedAt,
+      //     so only the owning organizer can start/rotate/stop a check-in session.
       // (b) Student registration: the ONLY write a student can make to this collection is an
       //     atomic +1 to registeredCount, and only while the event is published and under capacity.
-      // (c) Organizer check-in: the ONLY write a scanning organizer can make is an atomic +1 to
-      //     checkedInCount for their own club's event.
+      // (c) Student self-check-in: the ONLY write a checking-in student can make is an atomic +1
+      //     to checkedInCount. The real gate (did they present a valid, current token?) lives on
+      //     the matching registrations/{id} update below — this is just the denormalized counter.
       allow update: if (
           ownsCategory(resource.data.category)
           && unchanged('organizerId')
@@ -72,7 +75,7 @@ service cloud.firestore {
           && resource.data.status == 'published'
           && resource.data.registeredCount < resource.data.capacity
         ) || (
-          ownsCategory(resource.data.category)
+          isSignedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedInCount'])
           && request.resource.data.checkedInCount == resource.data.checkedInCount + 1
         );
@@ -102,10 +105,17 @@ service cloud.firestore {
         && newEvent().status == 'published'
         && newEvent().registeredCount < newEvent().capacity;
 
-      allow update: if ownsCategory(event().category)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt'])
+      // Self-check-in: a student can only flip their OWN registration to checkedIn, and only by
+      // submitting a lastCheckinToken that matches the event's live activeCheckinToken at the
+      // moment of the write (read fresh via get(), not trusted from the client otherwise). This
+      // is what makes a screenshotted/expired QR fail once the organizer's display has rotated.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt', 'lastCheckinToken'])
         && resource.data.checkedIn == false
-        && request.resource.data.checkedIn == true;
+        && request.resource.data.checkedIn == true
+        && event().activeCheckinToken != null
+        && request.resource.data.lastCheckinToken == event().activeCheckinToken;
 
       allow delete: if false;
     }

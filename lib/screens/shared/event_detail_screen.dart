@@ -9,7 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/event_badge_chip.dart';
 import '../auth/login_screen.dart';
-import 'ticket_screen.dart';
+import 'scan_to_checkin_screen.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -27,12 +27,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _registering = true);
     final firestore = context.read<FirestoreService>();
     try {
-      final registration = await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
+      await firestore.registerForEvent(eventId: widget.event.id, userId: userId);
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TicketScreen(event: widget.event, registration: registration, justRegistered: true),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You're registered! We'll see you there.")),
       );
     } catch (e) {
       if (!mounted) return;
@@ -83,6 +81,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(event.description),
+                
+                if (event.status == EventStatus.archived) ...[
+                  const Divider(height: 32),
+                  Text('Archive Summary', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  if (event.archiveSummary != null && event.archiveSummary!.isNotEmpty)
+                    Text(event.archiveSummary!),
+                  if (event.archivePhotos.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: event.archivePhotos.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, i) => ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: event.archivePhotos[i],
+                            width: 160,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => Container(
+                              width: 160,
+                              height: 120,
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              child: const Icon(Icons.image_not_supported),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+                
                 const SizedBox(height: 24),
                 _buildAction(context, event, auth, firestore),
               ],
@@ -120,13 +153,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       builder: (context, snapshot) {
         final registration = snapshot.data;
         if (registration != null) {
+          if (registration.checkedIn) {
+            return Chip(
+              label: const Text('Checked in'),
+              avatar: const Icon(Icons.check_circle, size: 18, color: Colors.white),
+              backgroundColor: Colors.green,
+              labelStyle: const TextStyle(color: Colors.white),
+            );
+          }
           return FilledButton.icon(
-            icon: const Icon(Icons.qr_code),
-            label: const Text('View My QR Ticket'),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan to Check In'),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => TicketScreen(event: event, registration: registration),
-              ),
+              MaterialPageRoute(builder: (_) => ScanToCheckinScreen(event: event)),
             ),
           );
         }

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
-import '../shared/ticket_screen.dart';
+import '../shared/scan_to_checkin_screen.dart';
 
 class MyTicketsScreen extends StatelessWidget {
   const MyTicketsScreen({super.key});
@@ -45,25 +44,23 @@ class MyTicketsScreen extends StatelessWidget {
                   if (event == null) return const SizedBox.shrink();
                   return Card(
                     child: ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(4),
-                        color: Colors.white,
-                        child: QrImageView(
-                          data: registration.qrCodeData,
-                          size: 44,
-                          version: QrVersions.auto,
-                        ),
+                      leading: Icon(
+                        registration.checkedIn ? Icons.check_circle : Icons.event_available,
+                        color: registration.checkedIn ? Colors.green : null,
                       ),
                       title: Text(event.title),
                       subtitle: Text(
                         '${event.venue} · ${DateFormat('MMM d, h:mm a').format(event.startTime)}',
                       ),
-                      trailing: registration.checkedIn ? const Chip(label: Text('Checked in')) : null,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => TicketScreen(event: event, registration: registration),
-                        ),
-                      ),
+                      trailing: registration.checkedIn
+                          ? const Chip(label: Text('Checked in'))
+                          : FilledButton.icon(
+                              icon: const Icon(Icons.qr_code_scanner, size: 18),
+                              label: const Text('Scan'),
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => ScanToCheckinScreen(event: event)),
+                              ),
+                            ),
                     ),
                   );
                 },

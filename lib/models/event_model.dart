@@ -47,6 +47,8 @@ class EventModel {
   final EventStatus status;
   final List<String> archivePhotos;
   final String? archiveSummary;
+  final String? activeCheckinToken;
+  final DateTime? tokenGeneratedAt;
   final DateTime? createdAt;
 
   EventModel({
@@ -66,6 +68,8 @@ class EventModel {
     required this.archivePhotos,
     required this.archiveSummary,
     required this.createdAt,
+    this.activeCheckinToken,
+    this.tokenGeneratedAt,
   });
 
   bool get isFull => registeredCount >= capacity;
@@ -96,6 +100,8 @@ class EventModel {
       archivePhotos: List<String>.from(map['archivePhotos'] as List? ?? []),
       archiveSummary: map['archiveSummary'] as String?,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
+      activeCheckinToken: map['activeCheckinToken'] as String?,
+      tokenGeneratedAt: (map['tokenGeneratedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -116,6 +122,8 @@ class EventModel {
       'archivePhotos': archivePhotos,
       'archiveSummary': archiveSummary,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'activeCheckinToken': activeCheckinToken,
+      'tokenGeneratedAt': tokenGeneratedAt != null ? Timestamp.fromDate(tokenGeneratedAt!) : null,
     };
   }
 }

@@ -14,14 +14,19 @@ class AlreadyRegisteredException implements Exception {
   String toString() => 'You are already registered for this event.';
 }
 
-class InvalidTicketException implements Exception {
+class NotRegisteredException implements Exception {
   @override
-  String toString() => 'This QR code is not valid for this event.';
+  String toString() => "You're not registered for this event.";
+}
+
+class InvalidCheckinTokenException implements Exception {
+  @override
+  String toString() => 'This code has expired. Ask the organizer for the current check-in code.';
 }
 
 class AlreadyCheckedInException implements Exception {
   @override
-  String toString() => 'This ticket has already been checked in.';
+  String toString() => "You're already checked in.";
 }
 
 class FirestoreService {
@@ -78,6 +83,23 @@ class FirestoreService {
     });
   }
 
+  /// Generates a fresh random token and publishes it as the event's live check-in code.
+  /// Called both to start a session and to rotate it every 45s.
+  Future<void> startCheckinSession(String eventId) {
+    return _events.doc(eventId).update({
+      'activeCheckinToken': _uuid.v4(),
+      'tokenGeneratedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Invalidates the current token so no previously-displayed (or screenshotted) QR works anymore.
+  Future<void> stopCheckinSession(String eventId) {
+    return _events.doc(eventId).update({
+      'activeCheckinToken': null,
+      'tokenGeneratedAt': null,
+    });
+  }
+
   // ---------------- Registrations ----------------
 
   Stream<List<RegistrationModel>> userRegistrations(String userId) {
@@ -113,7 +135,6 @@ class FirestoreService {
     required String eventId,
     required String userId,
   }) async {
-    final qrCodeData = _uuid.v4();
     final registrationRef = _registrations.doc('${eventId}_$userId');
     final eventRef = _events.doc(eventId);
 
@@ -135,7 +156,6 @@ class FirestoreService {
       tx.set(registrationRef, {
         'eventId': eventId,
         'userId': userId,
-        'qrCodeData': qrCodeData,
         'checkedIn': false,
         'checkedInAt': null,
         'registeredAt': FieldValue.serverTimestamp(),
@@ -147,40 +167,42 @@ class FirestoreService {
     return RegistrationModel.fromMap(saved.id, saved.data()!);
   }
 
-  /// Checks in a ticket by scanned [qrCodeData], validating it belongs to [expectedEventId].
-  Future<RegistrationModel> checkIn({
-    required String qrCodeData,
-    required String expectedEventId,
+  /// Self-check-in: [userId] scanned [scannedToken] off the organizer's projected QR for
+  /// [eventId]. Verifies they're actually registered, not already checked in, and that the
+  /// scanned token matches the event's CURRENT live token (rejects stale/screenshotted codes
+  /// once the organizer's display has rotated to a new one).
+  Future<void> selfCheckIn({
+    required String eventId,
+    required String userId,
+    required String scannedToken,
   }) async {
-    final matches = await _registrations.where('qrCodeData', isEqualTo: qrCodeData).limit(1).get();
-    if (matches.docs.isEmpty) {
-      throw InvalidTicketException();
-    }
-    final regDoc = matches.docs.first;
-    if (regDoc.data()['eventId'] != expectedEventId) {
-      throw InvalidTicketException();
-    }
+    final registrationRef = _registrations.doc('${eventId}_$userId');
+    final eventRef = _events.doc(eventId);
 
-    final eventRef = _events.doc(expectedEventId);
     await _db.runTransaction((tx) async {
-      final regSnap = await tx.get(regDoc.reference);
-      final regData = regSnap.data()!;
-      if (regData['eventId'] != expectedEventId) {
-        throw InvalidTicketException();
+      final regSnap = await tx.get(registrationRef);
+      if (!regSnap.exists) {
+        throw NotRegisteredException();
       }
+      final regData = regSnap.data()!;
       if (regData['checkedIn'] == true) {
         throw AlreadyCheckedInException();
       }
+
       final eventSnap = await tx.get(eventRef);
-      final checkedInCount = (eventSnap.data()?['checkedInCount'] as num?)?.toInt() ?? 0;
-      tx.update(regDoc.reference, {
+      final eventData = eventSnap.data();
+      final currentToken = eventData?['activeCheckinToken'] as String?;
+      if (currentToken == null || currentToken != scannedToken) {
+        throw InvalidCheckinTokenException();
+      }
+
+      final checkedInCount = (eventData?['checkedInCount'] as num?)?.toInt() ?? 0;
+      tx.update(registrationRef, {
         'checkedIn': true,
         'checkedInAt': FieldValue.serverTimestamp(),
+        'lastCheckinToken': scannedToken,
       });
       tx.update(eventRef, {'checkedInCount': checkedInCount + 1});
     });
-
-    final updated = await regDoc.reference.get();
-    return RegistrationModel.fromMap(updated.id, updated.data()!);
   }
 }

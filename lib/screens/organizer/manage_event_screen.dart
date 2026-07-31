@@ -6,8 +6,8 @@ import '../../models/event_model.dart';
 import '../../models/registration_model.dart';
 import '../../services/firestore_service.dart';
 import 'archive_event_screen.dart';
+import 'checkin_display_screen.dart';
 import 'create_event_screen.dart';
-import 'scan_screen.dart';
 
 class ManageEventScreen extends StatelessWidget {
   final EventModel event;
@@ -66,37 +66,53 @@ class ManageEventScreen extends StatelessWidget {
                   label: const Text('Publish Event'),
                   onPressed: () => _updateStatus(context, EventStatus.published),
                 ),
-              if (current.status == EventStatus.published) ...[
-                FilledButton.icon(
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Start Scanning'),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ScanScreen(event: current)),
+              if (current.status == EventStatus.published || current.status == EventStatus.concluded) ...[
+                if (DateTime.now().isAfter(current.endTime)) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Concluded - Needs Archiving',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.event_available),
-                  label: const Text('Mark as Concluded'),
-                  onPressed: () => _updateStatus(context, EventStatus.concluded),
-                ),
-              ],
-              if (current.status == EventStatus.concluded) ...[
-                FilledButton.icon(
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Start Scanning'),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ScanScreen(event: current)),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.archive),
+                    label: const Text('Archive Event'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => ArchiveEventScreen(event: current)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.archive),
-                  label: const Text('Archive Event'),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ArchiveEventScreen(event: current)),
+                ] else ...[
+                  FilledButton.icon(
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Start Check-In Session'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => CheckinDisplayScreen(event: current)),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.event_available),
+                    label: const Text('Mark as Concluded'),
+                    onPressed: () => _updateStatus(context, EventStatus.concluded),
+                  ),
+                ],
               ],
               if (current.status == EventStatus.archived) ...[
                 const Divider(height: 32),
